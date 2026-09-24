@@ -182,3 +182,81 @@ export async function deleteStudent(token: string, studentId: string) {
     return {};
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Kazanım karnesi analizi — KODLA (yapay zekâ yok)                    */
+/* ------------------------------------------------------------------ */
+// Karne dosyası önce tarayıcıdan Supabase deposuna ("karneler") yüklenir; burada sunucu dosyayı
+// depodan alır, PDF'in metin katmanını (unpdf) okur ve karne.ts içindeki kurallarla
+// konu bazlı yanlış/boş sayılarını uygulamanın konu listesine eşler. Dışarıya veri gönderilmez.
+
+export type KarneResult = {
+  title: string;
+  exam_date: string | null;
+  exam_type: "TYT" | "AYT" | "BRANS";
+  nets: Record<string, { d: number | null; y: number | null }>;
+  results: { topic_id: string; wrong: number; empty: number }[];
+  notes: string;
+};
+
+export type KarneReport = { lines: number; matched: number; unmatched: string[] };
+
+export async function analyzeKarne(token: string, studentId: string, filePath: string) {
+  return run(async () => {
+    const db = admin();
+    const counselorId = await requireCounselor(db, token);
+    await requireOwnStudent(db, counselorId, studentId);
+    if (!filePath.startsWith(`${studentId}/`)) throw new Fail("Geçersiz dosya.");
+
+    const { data: blob, error } = await db.storage.from("karneler").download(filePath);
+    if (error || !blob) throw new Fail("Karne dosyası okunamadı.");
+    if (blob.size > 10 * 1024 * 1024) throw new Fail("Dosya en fazla 10 MB olabilir.");
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+    if (!isPdf) throw new Fail("Fotoğraf karneler kodla okunamaz. Yayınevinin verdiği orijinal PDF'i yükleyin veya sonuçları elle girin.");
+
+    const { parseKarne, toLines } = await import("./karne");
+    const pages = await pdfText(bytes);
+    const lines = toLines(pages);
+    if (lines.length < 5) throw new Fail("PDF'te okunabilir metin yok (taranmış/fotoğraf PDF). Orijinal PDF'i yükleyin veya sonuçları elle girin.");
+
+    const p = parseKarne(lines);
+    if (!p.matched.length && !Object.keys(p.nets).length)
+      throw new Fail("Bu karne biçimi tanınamadı: konu satırları bulunamadı. Sonuçları elle girebilirsiniz.");
+
+    const result: KarneResult = {
+      title: str(p.title, 120) || `${p.exam_type} Deneme`,
+      exam_date: p.exam_date,
+      exam_type: p.exam_type,
+      nets: p.nets,
+      results: p.results,
+      notes: str(p.notes, 1000),
+    };
+    const report: KarneReport = { lines: lines.length, matched: p.matched.length, unmatched: p.unmatched.slice(0, 15) };
+    return { result, report };
+  });
+}
+
+/** PDF'in metin katmanını konum bilgisiyle çıkarır (pdf.js / unpdf). */
+async function pdfText(bytes: Uint8Array) {
+  const { getDocumentProxy } = await import("unpdf");
+  let pdf: Awaited<ReturnType<typeof getDocumentProxy>>;
+  try {
+    pdf = await getDocumentProxy(bytes);
+  } catch {
+    throw new Fail("PDF açılamadı (bozuk veya şifreli olabilir).");
+  }
+  const pages: { items: { str: string; x: number; y: number; w: number }[] }[] = [];
+  for (let i = 1; i <= Math.min(pdf.numPages, 12); i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    const items: { str: string; x: number; y: number; w: number }[] = [];
+    for (const it of tc.items as { str?: string; transform?: number[]; width?: number }[]) {
+      if (typeof it.str !== "string" || !it.transform) continue;
+      items.push({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width ?? 0 });
+    }
+    pages.push({ items });
+  }
+  await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.();
+  return pages;
+}

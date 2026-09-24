@@ -7,8 +7,9 @@ import { DailyLogSection } from "./daily";
 import { createStudent, deleteStudent, updateStudent } from "./actions";
 import { A, accessToken, errorText, sb, useAuth, useRoute } from "./db";
 import { SignalChips, StudentInsights } from "./insights";
-import { addDays, avg, computeSignals, type CounselorNote, type DailyLog, FIELDS, fmtNum, formatLong, GRADES, normalizeUsername, pct, pickCurrentPlan, type PlanTask, type Profile, relativeDay, type Signal, todayISO, type TopicProgress, USERNAME_RE, type WeeklyPlan } from "./lib";
+import { isRealTask, addDays, avg, computeSignals, type CounselorNote, type DailyLog, FIELDS, fmtNum, formatLong, GRADES, normalizeUsername, pct, pickCurrentPlan, type PlanTask, type Profile, relativeDay, type Signal, todayISO, type TopicProgress, USERNAME_RE, type WeeklyPlan } from "./lib";
 import { WeeklyPlanView } from "./plan";
+import { ExamAnalyses } from "./exams";
 import { PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast } from "./ui";
@@ -394,7 +395,7 @@ function StudentList() {
           const sl = logs.filter((l) => l.student_id === s.id).sort((a, b) => (a.log_date < b.log_date ? 1 : -1));
           const plan = current.get(s.id) ?? null;
           const pt = plan ? tasks.filter((t) => t.plan_id === plan.id) : [];
-          const withContent = pt.filter((t) => t.content.trim());
+          const withContent = pt.filter(isRealTask);
           const last7 = sl.filter((l) => l.log_date >= addDays(todayISO(), -6));
           const done = topics.filter((t) => t.student_id === s.id && isCompleted(t.status)).length;
           return {
@@ -683,10 +684,11 @@ function NewStudent() {
   );
 }
 
-type Tab = "ozet" | "program" | "gunluk" | "konular" | "notlar" | "hesap";
-const TABS: { value: Tab; label: string; icon: "chart" | "calendar" | "journal" | "book" | "note" | "user" }[] = [
+type Tab = "ozet" | "program" | "denemeler" | "gunluk" | "konular" | "notlar" | "hesap";
+const TABS: { value: Tab; label: string; icon: "chart" | "calendar" | "target" | "journal" | "book" | "note" | "user" }[] = [
   { value: "ozet", label: "Özet", icon: "chart" },
   { value: "program", label: "Program", icon: "calendar" },
+  { value: "denemeler", label: "Denemeler", icon: "target" },
   { value: "gunluk", label: "Günlük", icon: "journal" },
   { value: "konular", label: "Konular", icon: "book" },
   { value: "notlar", label: "Notlar", icon: "note" },
@@ -746,7 +748,12 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
 
       <div className="pt-1">
         {tab === "ozet" && <StudentInsights studentId={student.id} showSignals />}
-        {tab === "program" && <WeeklyPlanView studentId={student.id} />}
+        {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} />}
+        {tab === "denemeler" && (
+          <div className="max-w-3xl">
+            <ExamAnalyses studentId={student.id} />
+          </div>
+        )}
         {tab === "gunluk" && (
           <div className="max-w-3xl">
             <DailyLogSection studentId={student.id} studentName={student.full_name} />

@@ -417,14 +417,14 @@ export function StudentInsights({ studentId, showSignals = false }: { studentId:
         }
         if (!active) return;
         const rows: WeekRow[] = recent.map((p) => {
-          const pt = tasks.filter((t) => t.plan_id === p.id && t.content.trim());
+          const pt = tasks.filter((t) => t.plan_id === p.id && (t.topic_id || t.content.trim() || t.target_questions));
           const pd = dayRows.filter((d) => d.plan_id === p.id);
           return {
             plan: p,
             total: pt.length,
             done: pt.filter((t) => t.done).length,
             minutes: pd.reduce((s, d) => s + (d.study_minutes ?? 0), 0),
-            questions: pd.reduce((s, d) => s + (d.question_count ?? 0), 0),
+            questions: pt.reduce((s, t) => s + (t.solved ?? 0), 0) || pd.reduce((s, d) => s + (d.question_count ?? 0), 0),
           };
         });
         const cur = pickCurrentPlan(plans);

@@ -46,6 +46,34 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncelleme 2 — yeni haftalık program ve deneme analizi
+
+Bu sürümü mevcut kuruluma yüklerken **bir kez** şunu yap: Supabase → SQL Editor → `guncelleme-2.sql` dosyasının tamamını yapıştır → **Run**. (Veri silmez.) Sonra tüm dosyaları GitHub'a yükle.
+
+- **Program → Tablo:** Excel gibi; ders × gün. Hücreye tıkla → konu, görev türü (Soru / Konu / Tekrar / Deneme), hedef soru. Üst satırda her günün **müsaitliği** (Kapalı / Hafif / Normal / Yoğun).
+- **Denemeler sekmesi:** kazanım karnesini (PDF) yükle; netler ve konu konu yanlış/boş sayıları otomatik okunur (gerekirse elle düzeltilir).
+- **Otomatik program oluştur:** son denemedeki yanlış/boşlara ve müsait günlere göre her öncelikli konu için kısa konu tekrarı + soru çözümü dağıtır, günlük/haftalık hedef soruyu hesaplar. Sonra tabloda istediğin gibi düzenlersin. Soru hedefleri ve konu başına üst sınır `planner.ts` içinde.
+- **Otomatik konu takibi:** görev tamamlanınca (ya da öğrenci hedef soru sayısına ulaşınca) konu takibi güncellenir: Konu → Bitti, Soru → Çalışılıyor, Tekrar → Tekrar edildi. Hiçbir zaman geri almaz.
+
+## Güncelleme 3 — karne kodla okunur
+
+SQL çalıştırmaya gerek yok. Tüm dosyaları GitHub'a yükle (yeni dosya: `karne.ts`). Vercel'de daha önce `ANTHROPIC_API_KEY` eklediysen artık kullanılmıyor, silebilirsin.
+
+## Otomatik karne analizi (kodla, yapay zekâsız)
+
+Karne PDF'i sunucuda **kodla** okunur (`karne.ts`); hiçbir yapay zekâ servisi veya ek API anahtarı kullanılmaz, karne dışarıya gönderilmez.
+
+Nasıl çalışır:
+
+1. PDF'in metin katmanı konum bilgisiyle okunur (`unpdf`).
+2. **D / Y / B** (Doğru / Yanlış / Boş) sütun başlıkları bulunur, alttaki satırlardaki sayılar sütunlara eşlenir. Başlık yoksa *soru = doğru + yanlış + boş* kuralını sağlayan sayı dizisi aranır. Soru soru listelenen karnelerde satırdaki durum (D/Y/B, ✓/✗ veya cevap anahtarı ≠ öğrenci cevabı) kullanılır.
+3. Satırdaki kazanım metni, uygulamanın konu listesi + eş anlamlılar (`SYNONYMS`) ile eşleştirilir; ders başlığı (Türkçe, Temel Matematik…) bağlam olarak kullanılır.
+4. Bölüm net satırları (Türkçe 40 30 8 2 …) netlere, yanlış/boş sayıları konulara yazılır ve program oluşturma penceresi açılır.
+
+Kullanım: Öğrenci → **Denemeler** → **Kazanım karnesini yükle** → birkaç saniye → **Programı oluştur**. Yükleme sonrası "Okuma raporu"nda eşleşmeyen satırlar listelenir; sonuçlar ve program her zaman düzenlenebilir.
+
+Sınırlar: Yalnızca yayınevinin verdiği **orijinal (metin içeren) PDF** okunur. Fotoğraf veya taranmış PDF kodla okunamaz → "Karnesiz elle giriş". Bir yayınevinin ifadesi eşleşmiyorsa `karne.ts` içindeki `SYNONYMS` listesine ifadeyi ekle (ör. `"tyt-matematik.problemler": [..., "yeni ifade"]`).
+
 ## Özelleştirme
 
 GitHub'da dosyayı düzenleyip kaydettiğinde Vercel otomatik yeniden yayınlar.

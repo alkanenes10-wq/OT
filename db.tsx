@@ -3,7 +3,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import type { DailyLog, PlanDay, PlanTask, Profile, TopicProgress, WeeklyPlan } from "./lib";
+import type { DailyLog, ExamAnalysis, PlanDay, PlanTask, Profile, TopicProgress, WeeklyPlan } from "./lib";
 
 /* ------------------------------------------------------------------ */
 /* Supabase istemcisi                                                  */
@@ -83,6 +83,17 @@ export async function fetchTopicProgress(studentId: string): Promise<TopicProgre
   const { data, error } = await sb().from("topic_progress").select("*").eq("student_id", studentId);
   if (error) throw error;
   return (data ?? []) as TopicProgress[];
+}
+
+export async function fetchAnalyses(studentId: string): Promise<ExamAnalysis[]> {
+  const { data, error } = await sb()
+    .from("exam_analyses")
+    .select("*")
+    .eq("student_id", studentId)
+    .order("exam_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ExamAnalysis[];
 }
 
 /* ------------------------------------------------------------------ */

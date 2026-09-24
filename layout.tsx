@@ -4,6 +4,9 @@ import "./globals.css";
 import { APP_NAME } from "./lib";
 import { Providers } from "./shell";
 
+// Karne analizi gibi uzun sunucu işlemleri için (saniye)
+export const maxDuration = 120;
+
 export const metadata: Metadata = {
   title: APP_NAME,
   description: "YKS öğrencileri için akademik ve psikolojik takip uygulaması",

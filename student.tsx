@@ -7,7 +7,7 @@ import { DailyLogSection } from "./daily";
 import { A, errorText, fetchLogs, fetchPlans, sb, useAuth, useRoute } from "./db";
 import { StudentInsights } from "./insights";
 import { addDays, type DailyLog, dayShort, diffDays, fmtNum, formatLong, pct, pickCurrentPlan, type PlanTask, todayISO, type WeeklyPlan, yesNo } from "./lib";
-import { subjectOrder, TaskCheckRow, WeeklyPlanView } from "./plan";
+import { patchTask, subjectOrder, TaskRow, WeeklyPlanView } from "./plan";
 import { InstallHint, PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, ProgressBar, useToast } from "./ui";
@@ -42,16 +42,30 @@ function Today() {
     })();
   }, [profile, today]);
 
+  const replace = (row: PlanTask) => setTasks((ts) => ts.map((x) => (x.id === row.id ? row : x)));
+
   async function toggle(t: PlanTask) {
     const next = !t.done;
-    setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, done: next } : x)));
-    const { error } = await sb().from("plan_tasks").update({ done: next }).eq("id", t.id);
-    if (error) {
-      setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, done: t.done } : x)));
-      toast.show(errorText(error), "danger");
-    } else if (next) {
-      const remaining = todayTasks.filter((x) => !x.done && x.id !== t.id).length;
-      if (remaining === 0) toast.show("Bugünün tüm görevleri tamam!");
+    replace({ ...t, done: next });
+    try {
+      replace(await patchTask(t.id, { done: next }));
+      if (next) {
+        const remaining = todayTasks.filter((x) => !x.done && x.id !== t.id).length;
+        toast.show(remaining === 0 ? "Bugünün tüm görevleri tamam!" : "Tamamlandı");
+      }
+    } catch (e) {
+      replace(t);
+      toast.show(errorText(e), "danger");
+    }
+  }
+
+  async function setSolved(t: PlanTask, solved: number | null) {
+    try {
+      const row = await patchTask(t.id, { solved });
+      replace(row);
+      if (row.done && !t.done) toast.show("Hedefe ulaştın, görev tamamlandı!");
+    } catch (e) {
+      toast.show(errorText(e), "danger");
     }
   }
 
@@ -60,10 +74,12 @@ function Today() {
 
   const dayIndex = plan ? diffDays(plan.start_date, today) : -1;
   const todayTasks = tasks
-    .filter((t) => t.day_index === dayIndex && t.content.trim())
-    .sort((a, b) => subjectOrder(a.subject) - subjectOrder(b.subject));
+    .filter((t) => t.day_index === dayIndex && (t.topic_id || t.content.trim() || t.target_questions))
+    .sort((a, b) => subjectOrder(a.subject) - subjectOrder(b.subject) || a.sort - b.sort);
   const doneToday = todayTasks.filter((t) => t.done).length;
-  const weekTasks = tasks.filter((t) => t.content.trim());
+  const weekTasks = tasks.filter((t) => t.topic_id || t.content.trim() || t.target_questions);
+  const todayTarget = todayTasks.reduce((a, t) => a + (t.target_questions ?? 0), 0);
+  const todaySolved = todayTasks.reduce((a, t) => a + (t.solved ?? 0), 0);
   const weekDone = weekTasks.filter((t) => t.done).length;
   const todayLog = logs.find((l) => l.log_date === today) ?? null;
   const yesterdayLog = logs.find((l) => l.log_date === addDays(today, -1)) ?? null;
@@ -92,7 +108,7 @@ function Today() {
 
       <Card
         title="Bugünkü görevler"
-        subtitle={todayTasks.length ? `${doneToday} / ${todayTasks.length} tamamlandı` : undefined}
+        subtitle={todayTasks.length ? `${doneToday}/${todayTasks.length} görev · ${todaySolved}${todayTarget ? ` / ${todayTarget}` : ""} soru` : undefined}
         action={
           <A to={{ v: "program" }} className="text-sm font-medium text-primary">
             Program →
@@ -111,7 +127,7 @@ function Today() {
             <ul className="-mx-1 mt-2 divide-y divide-line">
               {todayTasks.map((t) => (
                 <li key={t.id}>
-                  <TaskCheckRow task={t} onToggle={toggle} />
+                  <TaskRow task={t} onToggle={toggle} onSolved={setSolved} />
                 </li>
               ))}
             </ul>

@@ -1,26 +1,107 @@
 "use client";
-// Haftalık program (Excel şablonunun 1. sayfası).
+// Haftalık program: Excel benzeri düzenlenebilir tablo (ders × gün), gün görünümü (telefon),
+// görev düzenleyici ve deneme analizine göre otomatik program oluşturucu.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { errorText, fetchPlanDetail, fetchPlans, sb, useAuth } from "./db";
-import { addDays, dayName, dayShort, DEFAULT_SUBJECTS, diffDays, EXTRA_SUBJECT_SUGGESTIONS, fmtNum, formatShort, formatTR, minutesToText, normalizeSubject, parseISODate, pct, pickCurrentPlan, type PlanDay, type PlanTask, type TimeBlock, timeToMinutes, todayISO, type WeeklyPlan } from "./lib";
-import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, Modal, PageLoader, ProgressBar, Segmented, useToast } from "./ui";
+import { ALL_TOPICS, COURSES } from "./curriculum";
+import { errorText, fetchAnalyses, fetchPlanDetail, fetchPlans, fetchTopicProgress, sb, useAuth } from "./db";
+import {
+  DAY_LEVELS,
+  DEFAULT_SUBJECTS,
+  EXTRA_SUBJECT_SUGGESTIONS,
+  SUBJECT_SECTIONS,
+  TASK_TYPES,
+  addDays,
+  dayName,
+  dayShort,
+  diffDays,
+  fmtNum,
+  formatShort,
+  formatTR,
+  minutesToText,
+  normalizeSubject,
+  parseISODate,
+  pct,
+  pickCurrentPlan,
+  timeToMinutes,
+  todayISO,
+  type DayLevel,
+  type ExamAnalysis,
+  type PlanDay,
+  type PlanTask,
+  type TaskType,
+  type TimeBlock,
+  type WeeklyPlan,
+} from "./lib";
+import { buildPlan, type DraftTask } from "./planner";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBox,
+  Field,
+  Icon,
+  IconButton,
+  Modal,
+  PageLoader,
+  ProgressBar,
+  Segmented,
+  confirmAction,
+  cx,
+  useToast,
+} from "./ui";
 
-const hasContent = (t: PlanTask) => t.content.trim().length > 0;
+const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
+const sectionTitle = new Map(COURSES.flatMap((c) => c.sections.map((s) => [s.id, s.title] as const)));
+const hasText = (t: PlanTask) => Boolean(t.topic_id || t.content.trim() || t.target_questions);
+export const taskTitle = (t: PlanTask) => (t.topic_id ? (topicName.get(t.topic_id) ?? t.topic_id) : t.content.trim() || t.subject);
+const typeShort = (t: TaskType) => TASK_TYPES.find((x) => x.value === t)?.short ?? "";
+const TYPE_TONE: Record<TaskType, string> = {
+  soru: "bg-primary-soft text-primary-ink",
+  konu: "bg-warning-soft text-warning",
+  tekrar: "bg-success-soft text-success",
+  deneme: "bg-danger-soft text-danger",
+  diger: "bg-surface-2 text-muted",
+};
+const DEFAULT_LEVELS: DayLevel[] = ["normal", "normal", "normal", "normal", "normal", "normal", "normal"];
+const levelsOf = (p: WeeklyPlan | null): DayLevel[] =>
+  Array.isArray(p?.day_levels) && p.day_levels.length === 7 ? p.day_levels : DEFAULT_LEVELS;
+const levelQ = (l: DayLevel) => DAY_LEVELS.find((x) => x.value === l)?.questions ?? 0;
 
+export function subjectOrder(s: string) {
+  const i = DEFAULT_SUBJECTS.indexOf(s);
+  return i === -1 ? 100 : i;
+}
+const byOrder = (a: PlanTask, b: PlanTask) => a.day_index - b.day_index || subjectOrder(a.subject) - subjectOrder(b.subject) || a.sort - b.sort;
+
+/** Görev alanlarını günceller; veritabanının hesapladığı son hali döner (ör. hedefe ulaşınca otomatik tamamlandı) */
+export async function patchTask(id: string, patch: Partial<PlanTask>): Promise<PlanTask> {
+  const { data, error } = await sb().from("plan_tasks").update(patch).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data as PlanTask;
+}
+
+/* ================================================================== */
 export function WeeklyPlanView({ studentId }: { studentId: string }) {
   const toast = useToast();
   const { profile } = useAuth();
+  const isCounselor = profile?.role === "counselor";
   const [plans, setPlans] = useState<WeeklyPlan[] | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<PlanTask[]>([]);
   const [days, setDays] = useState<PlanDay[]>([]);
   const [day, setDay] = useState(0);
-  const [edit, setEdit] = useState(false);
-  const [view, setView] = useState<"day" | "table">("day");
+  const [view, setView] = useState<"tablo" | "gun">("gun");
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Partial<PlanTask> | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
+
+  useEffect(() => {
+    if (window.innerWidth >= 900) setView("tablo");
+  }, []);
 
   const plan = useMemo(() => plans?.find((p) => p.id === planId) ?? null, [plans, planId]);
 
@@ -32,8 +113,8 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
         const chosen = selectId ? list.find((p) => p.id === selectId) : pickCurrentPlan(list);
         setPlanId(chosen?.id ?? null);
         if (chosen) {
-          const offset = diffDays(chosen.start_date, todayISO());
-          setDay(offset >= 0 && offset <= 6 ? offset : 0);
+          const off = diffDays(chosen.start_date, todayISO());
+          setDay(off >= 0 && off <= 6 ? off : 0);
         }
       } catch (e) {
         setError(errorText(e));
@@ -47,70 +128,99 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
     loadPlans();
   }, [loadPlans]);
 
+  const reloadDetail = useCallback(async (id: string) => {
+    setLoadingDetail(true);
+    try {
+      const d = await fetchPlanDetail(id);
+      setTasks(d.tasks);
+      setDays(d.days);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!planId) {
+    if (planId) reloadDetail(planId);
+    else {
       setTasks([]);
       setDays([]);
-      return;
     }
-    let active = true;
-    setLoadingDetail(true);
-    fetchPlanDetail(planId)
-      .then((d) => {
-        if (!active) return;
-        setTasks(d.tasks);
-        setDays(d.days);
-      })
-      .catch((e) => active && setError(errorText(e)))
-      .finally(() => active && setLoadingDetail(false));
-    return () => {
-      active = false;
-    };
-  }, [planId]);
+  }, [planId, reloadDetail]);
 
-  const sortedPlans = plans ?? [];
-  const idx = plan ? sortedPlans.findIndex((p) => p.id === plan.id) : -1;
+  const sorted = plans ?? [];
+  const idx = plan ? sorted.findIndex((p) => p.id === plan.id) : -1;
   const goPlan = (i: number) => {
-    const p = sortedPlans[i];
+    const p = sorted[i];
     if (!p) return;
     setPlanId(p.id);
-    const offset = diffDays(p.start_date, todayISO());
-    setDay(offset >= 0 && offset <= 6 ? offset : 0);
+    const off = diffDays(p.start_date, todayISO());
+    setDay(off >= 0 && off <= 6 ? off : 0);
   };
 
   /* ---------- görev işlemleri ---------- */
-  async function toggleTask(t: PlanTask) {
+  const replace = (t: PlanTask) => setTasks((ts) => [...ts.filter((x) => x.id !== t.id), t]);
+
+  async function toggle(t: PlanTask) {
     const next = !t.done;
     setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, done: next } : x)));
-    const { error } = await sb().from("plan_tasks").update({ done: next }).eq("id", t.id);
-    if (error) {
-      setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, done: t.done } : x)));
-      toast.show(errorText(error), "danger");
+    try {
+      replace(await patchTask(t.id, { done: next }));
+      if (next && t.topic_id && t.task_type !== "deneme") toast.show("Tamamlandı · konu takibi güncellendi");
+    } catch (e) {
+      replace(t);
+      toast.show(errorText(e), "danger");
     }
   }
 
-  async function saveTask(dayIndex: number, subject: string, content: string) {
-    if (!plan) return;
-    const existing = tasks.find((t) => t.day_index === dayIndex && t.subject === subject);
-    const clean = content.trim().slice(0, 500);
-    if (existing && existing.content === clean) return;
-    if (!clean) {
-      if (!existing) return;
-      const { error } = await sb().from("plan_tasks").delete().eq("id", existing.id);
-      if (error) return toast.show(errorText(error), "danger");
-      setTasks((ts) => ts.filter((t) => t.id !== existing.id));
-      return;
+  async function setSolved(t: PlanTask, solved: number | null) {
+    try {
+      const row = await patchTask(t.id, { solved });
+      replace(row);
+      if (row.done && !t.done) toast.show("Hedefe ulaşıldı, görev tamamlandı");
+    } catch (e) {
+      toast.show(errorText(e), "danger");
     }
-    const { data, error } = await sb()
-      .from("plan_tasks")
-      .upsert(
-        { plan_id: plan.id, student_id: studentId, day_index: dayIndex, subject, content: clean, done: existing?.done ?? false },
-        { onConflict: "plan_id,day_index,subject" },
-      )
-      .select("*")
-      .single();
-    if (error) return toast.show(errorText(error), "danger");
-    setTasks((ts) => [...ts.filter((t) => !(t.day_index === dayIndex && t.subject === subject)), data as PlanTask]);
+  }
+
+  async function saveTask(draft: Partial<PlanTask>) {
+    if (!plan) return;
+    const payload = {
+      day_index: draft.day_index ?? 0,
+      subject: normalizeSubject(draft.subject || "DİĞER"),
+      topic_id: draft.topic_id || null,
+      task_type: draft.task_type ?? "soru",
+      target_questions: draft.target_questions ?? null,
+      solved: draft.solved ?? null,
+      correct: draft.correct ?? null,
+      wrong: draft.wrong ?? null,
+      content: (draft.content ?? "").trim().slice(0, 500),
+      done: draft.done ?? false,
+    };
+    const q = draft.id
+      ? sb().from("plan_tasks").update(payload).eq("id", draft.id)
+      : sb()
+          .from("plan_tasks")
+          .insert({ ...payload, plan_id: plan.id, student_id: studentId, sort: tasks.filter((t) => t.day_index === payload.day_index).length });
+    const { data, error } = await q.select("*").single();
+    if (error) throw error;
+    replace(data as PlanTask);
+  }
+
+  async function removeTask(id: string) {
+    const { error } = await sb().from("plan_tasks").delete().eq("id", id);
+    if (error) throw error;
+    setTasks((ts) => ts.filter((t) => t.id !== id));
+  }
+
+  async function setLevel(d: number, level: DayLevel) {
+    if (!plan) return;
+    const levels = [...levelsOf(plan)];
+    levels[d] = level;
+    setPlans((ps) => (ps ?? []).map((p) => (p.id === plan.id ? { ...p, day_levels: levels } : p)));
+    const { error } = await sb().from("weekly_plans").update({ day_levels: levels }).eq("id", plan.id);
+    if (error) toast.show(errorText(error), "danger");
   }
 
   async function deletePlan() {
@@ -119,42 +229,58 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
     const { error } = await sb().from("weekly_plans").delete().eq("id", plan.id);
     if (error) return toast.show(errorText(error), "danger");
     toast.show("Program silindi");
-    setEdit(false);
     loadPlans();
   }
 
-  /* ---------- hesaplamalar ---------- */
-  const dayTasks = (i: number) => tasks.filter((t) => t.day_index === i && hasContent(t));
-  const weekTasks = tasks.filter(hasContent);
-  const weekDone = weekTasks.filter((t) => t.done).length;
-  const weekMinutes = days.reduce((s, d) => s + (d.study_minutes ?? 0), 0);
-  const weekQuestions = days.reduce((s, d) => s + (d.question_count ?? 0), 0);
+  /* ---------- özet ---------- */
+  const real = tasks.filter(hasText);
+  const done = real.filter((t) => t.done).length;
+  const target = real.reduce((s, t) => s + (t.target_questions ?? 0), 0);
+  const solved = real.reduce((s, t) => s + (t.solved ?? 0), 0);
+  const minutes = days.reduce((s, d) => s + (d.study_minutes ?? 0), 0);
 
   if (plans === null) return <PageLoader />;
 
   return (
-    <div className={cx("space-y-4", view !== "table" && "max-w-3xl")}>
+    <div className={cx("space-y-4", view === "gun" && "max-w-3xl")}>
       {error && <ErrorBox>{error}</ErrorBox>}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {isCounselor && (
+          <Button icon="target" onClick={() => setGenOpen(true)}>
+            Otomatik program oluştur
+          </Button>
+        )}
+        <Button variant="secondary" icon="plus" onClick={() => setNewOpen(true)}>
+          Boş hafta / kopyala
+        </Button>
+        {plan && (
+          <div className="ml-auto w-44">
+            <Segmented
+              size="sm"
+              value={view}
+              onChange={setView}
+              ariaLabel="Görünüm"
+              options={[
+                { value: "tablo", label: "Tablo" },
+                { value: "gun", label: "Gün" },
+              ]}
+            />
+          </div>
+        )}
+      </div>
 
       {!plan ? (
         <Card>
-          <EmptyState
-            icon="calendar"
-            title="Henüz haftalık program yok"
-            action={
-              <Button icon="plus" onClick={() => setNewOpen(true)}>
-                Yeni program oluştur
-              </Button>
-            }
-          >
-            Program 7 gün sürer ve seçtiğin günden başlar (ör. Çarşamba → Salı).
+          <EmptyState icon="calendar" title="Henüz haftalık program yok">
+            {isCounselor ? <><b>Otomatik program oluştur</b> ile son deneme analizine</> : <>Danışmanın programı hazırlayınca burada görünür. İstersen</>} ve öğrencinin müsait günlerine göre hazır bir hafta oluşturabilir, sonra tablo üzerinde
+            düzenleyebilirsin.
           </EmptyState>
         </Card>
       ) : (
         <>
-          {/* Program başlığı ve gezinme */}
-          <div className="card flex flex-wrap items-center gap-2 p-2 sm:p-3">
-            <IconButton icon="chevronLeft" label="Önceki program" disabled={idx <= 0} onClick={() => goPlan(idx - 1)} />
+          <div className="card flex items-center gap-2 p-2 sm:p-3">
+            <IconButton icon="chevronLeft" label="Önceki hafta" disabled={idx <= 0} onClick={() => goPlan(idx - 1)} />
             <div className="min-w-0 flex-1 text-center">
               <p className="truncate text-[15px] font-semibold">
                 {formatShort(plan.start_date)} – {formatShort(addDays(plan.start_date, 6))} {parseISODate(addDays(plan.start_date, 6)).getFullYear()}
@@ -164,108 +290,72 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
                 {plan.created_by && plan.created_by !== studentId ? " · Danışman hazırladı" : ""}
               </p>
             </div>
-            <IconButton icon="chevronRight" label="Sonraki program" disabled={idx >= sortedPlans.length - 1} onClick={() => goPlan(idx + 1)} />
+            <IconButton icon="chevronRight" label="Sonraki hafta" disabled={idx >= sorted.length - 1} onClick={() => goPlan(idx + 1)} />
+            <IconButton icon="trash" label="Bu haftayı sil" onClick={deletePlan} />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant={edit ? "primary" : "secondary"} size="sm" icon={edit ? "check" : "edit"} onClick={() => setEdit((e) => !e)}>
-              {edit ? "Düzenlemeyi bitir" : "Programı düzenle"}
-            </Button>
-            <Button variant="secondary" size="sm" icon="plus" onClick={() => setNewOpen(true)}>
-              Yeni program
-            </Button>
-            <div className="ml-auto hidden w-56 md:block">
-              <Segmented
-                size="sm"
-                value={view}
-                onChange={setView}
-                options={[
-                  { value: "day", label: "Gün" },
-                  { value: "table", label: "Tablo" },
-                ]}
-                ariaLabel="Görünüm"
-              />
-            </div>
-            {edit && (
-              <Button variant="danger" size="sm" icon="trash" onClick={deletePlan}>
-                Sil
-              </Button>
-            )}
-          </div>
-
-          {/* Haftalık özet */}
-          <div className="grid grid-cols-3 gap-2">
-            <Stat label="Tamamlanan" value={`${weekDone}/${weekTasks.length}`} sub={weekTasks.length ? `%${pct(weekDone, weekTasks.length)}` : "—"} />
-            <Stat label="Çalışma süresi" value={weekMinutes ? minutesToText(weekMinutes) : "—"} />
-            <Stat label="Soru sayısı" value={weekQuestions ? fmtNum(weekQuestions, 0) : "—"} />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat label="Görev" value={`${done}/${real.length}`} sub={real.length ? `%${pct(done, real.length)} tamamlandı` : "—"} />
+            <Stat label="Hedef soru" value={target ? fmtNum(target, 0) : "—"} />
+            <Stat label="Çözülen soru" value={solved ? fmtNum(solved, 0) : "—"} sub={target ? `hedefin %${pct(solved, target)}'i` : undefined} />
+            <Stat label="Çalışma süresi" value={minutes ? minutesToText(minutes) : "—"} />
           </div>
 
           {loadingDetail ? (
             <PageLoader />
-          ) : view === "table" ? (
-            <WeekTable
+          ) : view === "tablo" ? (
+            <WeekGrid
               plan={plan}
-              tasks={tasks}
+              tasks={real}
               days={days}
-              onPick={(i) => {
-                setDay(i);
-                setView("day");
+              onToggle={toggle}
+              onEdit={(t) => setEditing(t)}
+              onAdd={(d, subject) => setEditing({ day_index: d, subject, task_type: "soru" })}
+              onLevel={setLevel}
+              onPickDay={(d) => {
+                setDay(d);
+                setView("gun");
               }}
             />
           ) : (
-            <>
-              {/* Gün seçici */}
-              <div className="no-scrollbar -mx-4 overflow-x-auto px-4">
-                <div className="grid min-w-[322px] grid-cols-7 gap-1">
-                  {Array.from({ length: 7 }, (_, i) => {
-                    const date = addDays(plan.start_date, i);
-                    const dt = dayTasks(i);
-                    const done = dt.filter((t) => t.done).length;
-                    const isToday = date === todayISO();
-                    const active = i === day;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => setDay(i)}
-                        aria-pressed={active}
-                        className={cx(
-                          "flex flex-col items-center rounded-xl border px-1 py-2 transition",
-                          active ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface hover:bg-surface-2",
-                          !active && isToday && "ring-2 ring-primary/40",
-                        )}
-                      >
-                        <span className={cx("text-[11px] font-medium", active ? "opacity-90" : "text-muted")}>{dayShort(date)}</span>
-                        <span className="text-lg font-semibold tabular">{parseISODate(date).getDate()}</span>
-                        <span className={cx("text-[11px] tabular", active ? "opacity-90" : "text-faint")}>
-                          {dt.length ? `${done}/${dt.length}` : "–"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <DayPanel
-                key={`${plan.id}-${day}`}
-                plan={plan}
-                dayIndex={day}
-                tasks={tasks.filter((t) => t.day_index === day)}
-                edit={edit}
-                onToggle={toggleTask}
-                onSave={(subject, content) => saveTask(day, subject, content)}
-              />
-
-              <DayDetails
-                key={`details-${plan.id}-${day}`}
-                plan={plan}
-                dayIndex={day}
-                studentId={studentId}
-                current={days.find((d) => d.day_index === day) ?? null}
-                onSaved={(d) => setDays((ds) => [...ds.filter((x) => x.day_index !== d.day_index), d])}
-              />
-            </>
+            <DayView
+              plan={plan}
+              day={day}
+              setDay={setDay}
+              tasks={real}
+              days={days}
+              studentId={studentId}
+              onToggle={toggle}
+              onSolved={setSolved}
+              onEdit={(t) => setEditing(t)}
+              onAdd={(d) => setEditing({ day_index: d, subject: "TÜRKÇE", task_type: "soru" })}
+              onLevel={setLevel}
+              onDaySaved={(d) => setDays((ds) => [...ds.filter((x) => x.day_index !== d.day_index), d])}
+            />
           )}
         </>
+      )}
+
+      {editing && plan && (
+        <TaskEditor
+          plan={plan}
+          task={editing}
+          onClose={() => setEditing(null)}
+          onSave={async (t) => {
+            await saveTask(t);
+            setEditing(null);
+            toast.show("Kaydedildi");
+          }}
+          onDelete={
+            editing.id
+              ? async () => {
+                  await removeTask(editing.id as string);
+                  setEditing(null);
+                  toast.show("Görev silindi");
+                }
+              : undefined
+          }
+        />
       )}
 
       <NewPlanModal
@@ -273,13 +363,25 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
         onClose={() => setNewOpen(false)}
         studentId={studentId}
         copyFrom={plan}
-        isCounselor={profile?.role === "counselor"}
+        copyTasks={tasks}
+        isCounselor={isCounselor}
         onCreated={(id) => {
           setNewOpen(false);
-          setEdit(true);
           loadPlans(id);
         }}
       />
+      {genOpen && (
+        <GeneratorModal
+          studentId={studentId}
+          plans={sorted}
+          onClose={() => setGenOpen(false)}
+          onCreated={(id) => {
+            setGenOpen(false);
+            setView(window.innerWidth >= 900 ? "tablo" : "gun");
+            loadPlans(id).then(() => reloadDetail(id));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -288,198 +390,976 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   return (
     <div className="card px-3 py-2.5">
       <p className="text-[11px] font-medium text-muted">{label}</p>
-      <p className="mt-0.5 text-base font-semibold tabular sm:text-lg">{value}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular">{value}</p>
       {sub && <p className="text-[11px] text-faint tabular">{sub}</p>}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-function DayPanel({
+/* ================================================================== */
+/* Excel benzeri tablo                                                 */
+/* ================================================================== */
+function WeekGrid({
   plan,
-  dayIndex,
   tasks,
-  edit,
+  days,
   onToggle,
-  onSave,
+  onEdit,
+  onAdd,
+  onLevel,
+  onPickDay,
 }: {
   plan: WeeklyPlan;
-  dayIndex: number;
   tasks: PlanTask[];
-  edit: boolean;
+  days: PlanDay[];
   onToggle: (t: PlanTask) => void;
-  onSave: (subject: string, content: string) => Promise<void>;
+  onEdit: (t: PlanTask) => void;
+  onAdd: (d: number, subject: string) => void;
+  onLevel: (d: number, l: DayLevel) => void;
+  onPickDay: (d: number) => void;
 }) {
-  const date = addDays(plan.start_date, dayIndex);
   const [extra, setExtra] = useState<string[]>([]);
   const [adding, setAdding] = useState("");
-  const withContent = tasks.filter(hasContent);
-  const done = withContent.filter((t) => t.done).length;
-
-  const subjects = useMemo(() => {
-    const fromTasks = tasks.map((t) => t.subject);
-    const all = [...DEFAULT_SUBJECTS, ...fromTasks, ...extra];
-    return all.filter((s, i) => all.indexOf(s) === i);
-  }, [tasks, extra]);
+  const levels = levelsOf(plan);
+  const dates = Array.from({ length: 7 }, (_, i) => addDays(plan.start_date, i));
+  const all = [...DEFAULT_SUBJECTS, ...tasks.map((t) => t.subject), ...extra];
+  const subjects = all.filter((s, i) => all.indexOf(s) === i).sort((a, b) => subjectOrder(a) - subjectOrder(b));
+  const today = todayISO();
+  const sum = (d: number, f: (t: PlanTask) => number) => tasks.filter((t) => t.day_index === d).reduce((s, t) => s + f(t), 0);
 
   return (
-    <Card
-      title={`${dayName(date)} · ${formatShort(date)}`}
-      subtitle={withContent.length ? `${done} / ${withContent.length} görev tamamlandı` : undefined}
-      action={withContent.length ? <div className="w-24 pt-2"><ProgressBar value={pct(done, withContent.length)} tone="success" /></div> : undefined}
-    >
-      {edit ? (
-        <div className="space-y-2">
-          <p className="text-xs text-muted">Görevi yazıp kutudan çıkınca otomatik kaydedilir. Silmek için kutuyu boşaltın.</p>
-          {subjects.map((s) => {
-            const t = tasks.find((x) => x.subject === s);
-            return <TaskEditRow key={s} subject={s} task={t} onSave={(c) => onSave(s, c)} onToggle={onToggle} />;
-          })}
-          <div className="flex gap-2 pt-2">
-            <input
-              className="field"
-              list="subject-suggestions"
-              placeholder="Başka ders ekle (ör. DENEME)"
-              value={adding}
-              onChange={(e) => setAdding(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  const s = normalizeSubject(adding);
-                  if (s && !subjects.includes(s)) setExtra((x) => [...x, s]);
-                  setAdding("");
-                }
-              }}
-            />
-            <datalist id="subject-suggestions">
-              {EXTRA_SUBJECT_SUGGESTIONS.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-            <Button
-              variant="secondary"
-              icon="plus"
-              onClick={() => {
-                const s = normalizeSubject(adding);
-                if (s && !subjects.includes(s)) setExtra((x) => [...x, s]);
-                setAdding("");
-              }}
-            >
-              Ekle
-            </Button>
-          </div>
-        </div>
-      ) : withContent.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted">Bu gün için görev yok. Eklemek için “Programı düzenle”ye dokun.</p>
-      ) : (
-        <ul className="-mx-1 divide-y divide-line">
-          {withContent
-            .sort((a, b) => subjectOrder(a.subject) - subjectOrder(b.subject))
-            .map((t) => (
-              <li key={t.id}>
-                <TaskCheckRow task={t} onToggle={onToggle} />
-              </li>
+    <div className="space-y-2">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[1040px] table-fixed border-collapse text-[13px]">
+          <colgroup>
+            <col className="w-[132px]" />
+            {dates.map((d) => (
+              <col key={d} />
             ))}
-        </ul>
-      )}
-    </Card>
+          </colgroup>
+          <thead>
+            <tr className="bg-primary text-primary-fg">
+              <th className="sticky left-0 z-10 bg-primary px-2 py-2 text-left text-xs font-semibold">DERSLER</th>
+              {dates.map((d, i) => (
+                <th key={d} className="border-l border-white/20 px-2 py-1.5 text-left">
+                  <button className="w-full text-left" onClick={() => onPickDay(i)} title="Gün görünümünde aç">
+                    <span className="block text-xs font-semibold">{dayName(d).toLocaleUpperCase("tr-TR")}</span>
+                    <span className={cx("block text-[11px] font-normal opacity-80", d === today && "font-semibold opacity-100")}>
+                      {formatShort(d)}
+                      {d === today ? " · bugün" : ""}
+                    </span>
+                  </button>
+                </th>
+              ))}
+            </tr>
+            <tr className="bg-surface-2">
+              <th className="sticky left-0 z-10 bg-surface-2 px-2 py-1.5 text-left text-[11px] font-semibold text-muted">MÜSAİTLİK</th>
+              {dates.map((d, i) => (
+                <td key={d} className="border-l border-line px-1.5 py-1.5">
+                  <select
+                    aria-label={`${dayName(d)} müsaitlik`}
+                    value={levels[i]}
+                    onChange={(e) => onLevel(i, e.target.value as DayLevel)}
+                    className={cx(
+                      "h-7 w-full rounded-md border px-1 text-xs font-medium",
+                      levels[i] === "kapali" ? "border-line bg-surface-2 text-faint" : levels[i] === "yogun" ? "border-transparent bg-primary-soft text-primary-ink" : "border-line bg-surface",
+                    )}
+                  >
+                    {DAY_LEVELS.map((l) => (
+                      <option key={l.value} value={l.value}>
+                        {l.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subjects.map((s) => (
+              <tr key={s} className="border-t border-line align-top">
+                <th scope="row" className="sticky left-0 z-10 bg-surface px-2 py-2 text-left text-[11px] font-semibold text-muted">
+                  {s}
+                </th>
+                {dates.map((d, i) => {
+                  const cell = tasks.filter((t) => t.subject === s && t.day_index === i).sort(byOrder);
+                  const closed = levels[i] === "kapali";
+                  return (
+                    <td key={d} className={cx("group border-l border-line p-1", closed && "bg-surface-2/70")}>
+                      <div className="space-y-0.5">
+                        {cell.map((t) => (
+                          <GridChip key={t.id} task={t} onToggle={onToggle} onEdit={onEdit} />
+                        ))}
+                        <button
+                          onClick={() => onAdd(i, s)}
+                          aria-label={`${s} ${dayName(d)} görev ekle`}
+                          className={cx(
+                            "flex w-full items-center justify-center rounded-md text-faint transition hover:bg-primary-soft hover:text-primary-ink",
+                            cell.length ? "h-5 opacity-0 group-hover:opacity-100 focus:opacity-100" : "h-8 opacity-30 group-hover:opacity-100 focus:opacity-100",
+                          )}
+                        >
+                          <Icon name="plus" size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr className="border-t-2 border-line bg-surface-2 font-medium">
+              <th scope="row" className="sticky left-0 z-10 bg-surface-2 px-2 py-2 text-left text-[11px] font-semibold text-muted">
+                HEDEF SORU
+              </th>
+              {dates.map((d, i) => {
+                const t = sum(i, (x) => x.target_questions ?? 0);
+                const cap = levelQ(levels[i]);
+                return (
+                  <td key={d} className="border-l border-line px-2 py-2 tabular">
+                    {t || "—"}
+                    {cap > 0 && <span className={cx("ml-1 text-[11px]", t > cap * 1.15 ? "text-warning" : "text-faint")}>/ ~{cap}</span>}
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-t border-line bg-surface-2">
+              <th scope="row" className="sticky left-0 z-10 bg-surface-2 px-2 py-2 text-left text-[11px] font-semibold text-muted">
+                ÇÖZÜLEN
+              </th>
+              {dates.map((d, i) => {
+                const sv = sum(i, (x) => x.solved ?? 0);
+                const tg = sum(i, (x) => x.target_questions ?? 0);
+                return (
+                  <td key={d} className="border-l border-line px-2 py-2 tabular">
+                    {sv || "—"}
+                    {tg > 0 && sv > 0 && <span className="ml-1 text-[11px] text-faint">%{pct(sv, tg)}</span>}
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-t border-line bg-surface-2">
+              <th scope="row" className="sticky left-0 z-10 bg-surface-2 px-2 py-2 text-left text-[11px] font-semibold text-muted">
+                ÇALIŞMA SÜRESİ
+              </th>
+              {dates.map((d, i) => (
+                <td key={d} className="border-l border-line px-2 py-2 tabular">
+                  {minutesToText(days.find((x) => x.day_index === i)?.study_minutes)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        <input
+          className="field h-9 w-56 py-1 text-sm"
+          list="grid-subjects"
+          placeholder="Ders satırı ekle (ör. AYT FİZİK)"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const s = normalizeSubject(adding);
+              if (s) setExtra((x) => [...x, s]);
+              setAdding("");
+            }
+          }}
+        />
+        <datalist id="grid-subjects">
+          {EXTRA_SUBJECT_SUGGESTIONS.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+        <span>Hücreye tıkla → görev ekle · Göreve tıkla → düzenle · Kutucuk → tamamlandı</span>
+        <span className="ml-auto flex flex-wrap gap-1.5">
+          {TASK_TYPES.map((t) => (
+            <span key={t.value} className={cx("rounded px-1.5 py-0.5 text-[10px] font-semibold", TYPE_TONE[t.value])}>
+              {t.label}
+            </span>
+          ))}
+        </span>
+      </div>
+    </div>
   );
 }
 
-export function subjectOrder(s: string) {
-  const i = DEFAULT_SUBJECTS.indexOf(s);
-  return i === -1 ? 100 : i;
+function GridChip({ task, onToggle, onEdit }: { task: PlanTask; onToggle: (t: PlanTask) => void; onEdit: (t: PlanTask) => void }) {
+  const progress = task.target_questions ? `${task.solved != null ? `${task.solved}/` : ""}${task.target_questions}` : "";
+  return (
+    <div className={cx("flex items-start gap-1 rounded-md px-1 py-0.5", task.done ? "bg-success-soft" : "hover:bg-surface-2")}>
+      <button
+        role="checkbox"
+        aria-checked={task.done}
+        aria-label={`${taskTitle(task)} tamamlandı`}
+        onClick={() => onToggle(task)}
+        className={cx(
+          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-[1.5px]",
+          task.done ? "border-success bg-success text-white" : "border-faint bg-surface",
+        )}
+      >
+        {task.done && <Icon name="check" size={11} strokeWidth={3.5} />}
+      </button>
+      <button onClick={() => onEdit(task)} className="min-w-0 flex-1 text-left leading-tight" title={task.content || undefined}>
+        <span className={cx("mr-1 rounded px-1 text-[9px] font-bold uppercase", TYPE_TONE[task.task_type])}>{typeShort(task.task_type)}</span>
+        <span className={cx(task.done && "text-muted")}>{taskTitle(task)}</span>
+        {progress && <span className="ml-1 inline-block whitespace-nowrap text-[11px] font-semibold text-muted tabular">{progress}</span>}
+      </button>
+    </div>
+  );
 }
 
-export function TaskCheckRow({ task, onToggle }: { task: PlanTask; onToggle: (t: PlanTask) => void }) {
+/* ================================================================== */
+/* Gün görünümü (telefon / öğrenci)                                    */
+/* ================================================================== */
+function DayView({
+  plan,
+  day,
+  setDay,
+  tasks,
+  days,
+  studentId,
+  onToggle,
+  onSolved,
+  onEdit,
+  onAdd,
+  onLevel,
+  onDaySaved,
+}: {
+  plan: WeeklyPlan;
+  day: number;
+  setDay: (d: number) => void;
+  tasks: PlanTask[];
+  days: PlanDay[];
+  studentId: string;
+  onToggle: (t: PlanTask) => void;
+  onSolved: (t: PlanTask, n: number | null) => void;
+  onEdit: (t: PlanTask) => void;
+  onAdd: (d: number) => void;
+  onLevel: (d: number, l: DayLevel) => void;
+  onDaySaved: (d: PlanDay) => void;
+}) {
+  const levels = levelsOf(plan);
+  const dayTasks = tasks.filter((t) => t.day_index === day).sort(byOrder);
+  const doneN = dayTasks.filter((t) => t.done).length;
+  const target = dayTasks.reduce((s, t) => s + (t.target_questions ?? 0), 0);
+  const solved = dayTasks.reduce((s, t) => s + (t.solved ?? 0), 0);
+  const date = addDays(plan.start_date, day);
+
   return (
-    <button
-      onClick={() => onToggle(task)}
-      role="checkbox"
-      aria-checked={task.done}
-      className="flex w-full items-start gap-3 rounded-xl px-1 py-3 text-left transition hover:bg-surface-2"
-    >
-      <span
+    <>
+      <div className="no-scrollbar -mx-4 overflow-x-auto px-4">
+        <div className="grid min-w-[322px] grid-cols-7 gap-1">
+          {Array.from({ length: 7 }, (_, i) => {
+            const d = addDays(plan.start_date, i);
+            const dt = tasks.filter((t) => t.day_index === i);
+            const active = i === day;
+            return (
+              <button
+                key={i}
+                onClick={() => setDay(i)}
+                aria-pressed={active}
+                className={cx(
+                  "flex flex-col items-center rounded-xl border px-1 py-2 transition",
+                  active ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface hover:bg-surface-2",
+                  !active && d === todayISO() && "ring-2 ring-primary/40",
+                  !active && levels[i] === "kapali" && "opacity-60",
+                )}
+              >
+                <span className={cx("text-[11px] font-medium", active ? "opacity-90" : "text-muted")}>{dayShort(d)}</span>
+                <span className="text-lg font-semibold tabular">{parseISODate(d).getDate()}</span>
+                <span className={cx("text-[11px] tabular", active ? "opacity-90" : "text-faint")}>
+                  {dt.length ? `${dt.filter((t) => t.done).length}/${dt.length}` : "–"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Card
+        title={`${dayName(date)} · ${formatShort(date)}`}
+        subtitle={
+          dayTasks.length ? `${doneN}/${dayTasks.length} görev · ${solved}${target ? ` / ${target}` : ""} soru` : levels[day] === "kapali" ? "Bu gün kapalı (dinlenme)" : undefined
+        }
+        action={
+          <select
+            aria-label="Müsaitlik"
+            value={levels[day]}
+            onChange={(e) => onLevel(day, e.target.value as DayLevel)}
+            className="h-8 rounded-lg border border-line bg-surface px-2 text-xs"
+          >
+            {DAY_LEVELS.map((l) => (
+              <option key={l.value} value={l.value}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        }
+      >
+        {dayTasks.length > 0 && <ProgressBar value={pct(doneN, dayTasks.length)} tone="success" label="Günün görevleri" />}
+        {dayTasks.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted">Bu gün için görev yok.</p>
+        ) : (
+          <ul className="-mx-1 mt-2 divide-y divide-line">
+            {dayTasks.map((t) => (
+              <li key={t.id}>
+                <TaskRow task={t} onToggle={onToggle} onSolved={onSolved} onEdit={onEdit} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-3">
+          <Button variant="soft" size="sm" icon="plus" onClick={() => onAdd(day)}>
+            Görev ekle
+          </Button>
+        </div>
+      </Card>
+
+      <DayDetails
+        key={`details-${plan.id}-${day}`}
+        plan={plan}
+        dayIndex={day}
+        studentId={studentId}
+        solvedTotal={solved}
+        current={days.find((d) => d.day_index === day) ?? null}
+        onSaved={onDaySaved}
+      />
+    </>
+  );
+}
+
+/** Görev satırı: kutucuk, tür, konu, hedef ve "çözdüğüm" girişi (Bugün ekranında da kullanılır) */
+export function TaskRow({
+  task,
+  onToggle,
+  onSolved,
+  onEdit,
+}: {
+  task: PlanTask;
+  onToggle: (t: PlanTask) => void;
+  onSolved: (t: PlanTask, n: number | null) => void;
+  onEdit?: (t: PlanTask) => void;
+}) {
+  const [value, setValue] = useState(task.solved != null ? String(task.solved) : "");
+  useEffect(() => setValue(task.solved != null ? String(task.solved) : ""), [task.solved]);
+  const showSolved = task.task_type === "soru" || task.task_type === "deneme" || task.target_questions != null;
+  const commit = () => {
+    const n = value.trim() === "" ? null : Math.min(2000, Math.max(0, Math.round(Number(value))));
+    if (n !== null && Number.isNaN(n)) return;
+    if (n !== task.solved) onSolved(task, n);
+  };
+  return (
+    <div className="flex items-start gap-3 px-1 py-3">
+      <button
+        onClick={() => onToggle(task)}
+        role="checkbox"
+        aria-checked={task.done}
+        aria-label={`${taskTitle(task)} tamamlandı`}
         className={cx(
           "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition",
           task.done ? "border-success bg-success text-white" : "border-line bg-surface",
         )}
       >
         {task.done && <Icon name="check" size={16} strokeWidth={3} />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-semibold tracking-wide text-muted">{task.subject}</span>
-        <span className={cx("block text-[15px] leading-snug", task.done && "text-faint line-through")}>{task.content}</span>
-      </span>
-    </button>
-  );
-}
-
-function TaskEditRow({
-  subject,
-  task,
-  onSave,
-  onToggle,
-}: {
-  subject: string;
-  task?: PlanTask;
-  onSave: (content: string) => Promise<void>;
-  onToggle: (t: PlanTask) => void;
-}) {
-  const [value, setValue] = useState(task?.content ?? "");
-  const [saving, setSaving] = useState(false);
-  useEffect(() => setValue(task?.content ?? ""), [task?.content]);
-  const commit = async () => {
-    if ((task?.content ?? "") === value.trim()) return;
-    setSaving(true);
-    await onSave(value);
-    setSaving(false);
-  };
-  return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[150px_1fr_auto]">
-      <label className="col-span-2 text-[11px] font-semibold tracking-wide text-muted sm:col-span-1 sm:text-xs" htmlFor={`t-${subject}`}>
-        {subject}
-      </label>
-      <div className="relative">
-        <input
-          id={`t-${subject}`}
-          className="field py-2"
-          value={value}
-          maxLength={500}
-          placeholder="Görev (ör. 40 soru, 2 konu tekrarı)"
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        />
-        {saving && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">kaydediliyor…</span>}
-      </div>
-      <button
-        type="button"
-        disabled={!task}
-        onClick={() => task && onToggle(task)}
-        aria-label={task?.done ? "Tamamlanmadı olarak işaretle" : "Tamamlandı olarak işaretle"}
-        className={cx(
-          "flex h-10 w-10 items-center justify-center rounded-xl border-2 transition disabled:opacity-30",
-          task?.done ? "border-success bg-success text-white" : "border-line bg-surface text-transparent",
-        )}
-      >
-        <Icon name="check" size={18} strokeWidth={3} />
       </button>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold tracking-wide text-muted">{task.subject}</span>
+          <span className={cx("rounded px-1.5 text-[10px] font-bold uppercase", TYPE_TONE[task.task_type])}>{typeShort(task.task_type)}</span>
+        </div>
+        <p className={cx("text-[15px] leading-snug", task.done && "text-faint line-through")}>{taskTitle(task)}</p>
+        {task.topic_id && task.content.trim() && <p className="text-xs text-muted">{task.content}</p>}
+        {showSolved && (
+          <div className="mt-1.5 flex items-center gap-2 text-sm">
+            <label className="text-xs text-muted" htmlFor={`solved-${task.id}`}>
+              Çözdüğüm
+            </label>
+            <input
+              id={`solved-${task.id}`}
+              inputMode="numeric"
+              className="field h-8 w-16 px-2 py-1 text-center text-sm tabular"
+              value={value}
+              onChange={(e) => setValue(e.target.value.replace(/[^\d]/g, ""))}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder="0"
+            />
+            {task.target_questions ? <span className="text-xs text-muted tabular">/ {task.target_questions} soru</span> : <span className="text-xs text-muted">soru</span>}
+          </div>
+        )}
+      </div>
+      {onEdit && <IconButton icon="edit" label="Görevi düzenle" onClick={() => onEdit(task)} className="-mr-1 h-9 w-9" />}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* Görev düzenleyici                                                   */
+/* ================================================================== */
+function TaskEditor({
+  plan,
+  task,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  plan: WeeklyPlan;
+  task: Partial<PlanTask>;
+  onClose: () => void;
+  onSave: (t: Partial<PlanTask>) => Promise<void>;
+  onDelete?: () => Promise<void>;
+}) {
+  const [t, setT] = useState<Partial<PlanTask>>({ task_type: "soru", content: "", ...task });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const set = (patch: Partial<PlanTask>) => setT((x) => ({ ...x, ...patch }));
+  const subject = t.subject ?? "TÜRKÇE";
+  const sections = SUBJECT_SECTIONS[subject] ?? [];
+  const subjects = [...DEFAULT_SUBJECTS, ...EXTRA_SUBJECT_SUGGESTIONS, ...Object.keys(SUBJECT_SECTIONS)];
+  const subjectOptions = [...subjects, subject].filter((s, i, a) => a.indexOf(s) === i);
+  const num = (v: string) => (v.trim() === "" ? null : Math.min(2000, Math.max(0, Math.round(Number(v.replace(/[^\d]/g, "")) || 0))));
+
+  async function save() {
+    setError(null);
+    if (!t.topic_id && !(t.content ?? "").trim() && !t.target_questions) return setError("Bir konu seçin veya açıklama yazın.");
+    setBusy(true);
+    try {
+      await onSave({ ...t, subject });
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t.id ? "Görevi düzenle" : "Görev ekle"}
+      footer={
+        <>
+          {onDelete && (
+            <Button
+              variant="danger"
+              icon="trash"
+              className="mr-auto"
+              onClick={async () => {
+                if (!confirmAction("Görev silinsin mi?")) return;
+                try {
+                  await onDelete();
+                } catch (e) {
+                  setError(errorText(e));
+                }
+              }}
+            >
+              Sil
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button icon="check" onClick={save} loading={busy}>
+            Kaydet
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Gün" htmlFor="te-day">
+            <select id="te-day" className="field" value={t.day_index ?? 0} onChange={(e) => set({ day_index: Number(e.target.value) })}>
+              {Array.from({ length: 7 }, (_, i) => (
+                <option key={i} value={i}>
+                  {dayName(addDays(plan.start_date, i))} · {formatShort(addDays(plan.start_date, i))}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Ders" htmlFor="te-subject">
+            <select id="te-subject" className="field" value={subject} onChange={(e) => set({ subject: e.target.value, topic_id: null })}>
+              {subjectOptions.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <Field label="Görev türü">
+          <div className="flex flex-wrap gap-1.5">
+            {TASK_TYPES.map((x) => (
+              <button
+                key={x.value}
+                type="button"
+                onClick={() => set({ task_type: x.value })}
+                aria-pressed={t.task_type === x.value}
+                className={cx(
+                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
+                  t.task_type === x.value ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface hover:bg-surface-2",
+                )}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+        {sections.length > 0 && (
+          <Field
+            label="Konu"
+            htmlFor="te-topic"
+            hint={
+              t.task_type === "konu"
+                ? "Tamamlanınca konu takibinde “Bitti” olur"
+                : t.task_type === "tekrar"
+                  ? "Tamamlanınca konu takibinde “Tekrar edildi” olur"
+                  : t.task_type === "soru"
+                    ? "Tamamlanınca konu takibinde en az “Çalışılıyor” olur"
+                    : undefined
+            }
+          >
+            <select id="te-topic" className="field" value={t.topic_id ?? ""} onChange={(e) => set({ topic_id: e.target.value || null })}>
+              <option value="">— Konu seçilmedi —</option>
+              {COURSES.flatMap((c) => c.sections)
+                .filter((s) => sections.includes(s.id))
+                .map((s) => (
+                  <optgroup key={s.id} label={sectionTitle.get(s.id)}>
+                    {s.topics.map((tp) => (
+                      <option key={tp.id} value={tp.id}>
+                        {tp.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+            </select>
+          </Field>
+        )}
+        <Field label="Hedef soru sayısı" htmlFor="te-target">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id="te-target"
+              inputMode="numeric"
+              className="field w-24"
+              value={t.target_questions ?? ""}
+              onChange={(e) => set({ target_questions: num(e.target.value) })}
+              placeholder="—"
+            />
+            {[20, 30, 40, 50, 60].map((n) => (
+              <button key={n} type="button" onClick={() => set({ target_questions: n })} className="rounded-lg border border-line px-2.5 py-1 text-sm hover:bg-surface-2">
+                {n}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Açıklama (isteğe bağlı)" htmlFor="te-content">
+          <input
+            id="te-content"
+            className="field"
+            maxLength={500}
+            value={t.content ?? ""}
+            onChange={(e) => set({ content: e.target.value })}
+            placeholder="ör. 3D yayınları test 4-6, video: …"
+          />
+        </Field>
+        <div className="rounded-xl bg-surface-2 p-3">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" className="h-5 w-5" checked={Boolean(t.done)} onChange={(e) => set({ done: e.target.checked })} />
+            Tamamlandı
+          </label>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {(
+              [
+                ["solved", "Çözülen"],
+                ["correct", "Doğru"],
+                ["wrong", "Yanlış"],
+              ] as const
+            ).map(([k, label]) => (
+              <Field key={k} label={label} htmlFor={`te-${k}`}>
+                <input id={`te-${k}`} inputMode="numeric" className="field" value={t[k] ?? ""} onChange={(e) => set({ [k]: num(e.target.value) })} />
+              </Field>
+            ))}
+          </div>
+        </div>
+        {error && <ErrorBox>{error}</ErrorBox>}
+      </div>
+    </Modal>
+  );
+}
+
+/* ================================================================== */
+/* Otomatik program oluşturucu                                         */
+/* ================================================================== */
+export function GeneratorModal({
+  studentId,
+  plans: plansProp,
+  initialAnalysisId,
+  onClose,
+  onCreated,
+}: {
+  studentId: string;
+  plans?: WeeklyPlan[];
+  initialAnalysisId?: string;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const [plans, setPlans] = useState<WeeklyPlan[]>(plansProp ?? []);
+  useEffect(() => {
+    if (!plansProp) fetchPlans(studentId).then(setPlans).catch(() => {});
+  }, [plansProp, studentId]);
+  const toast = useToast();
+  const [analyses, setAnalyses] = useState<ExamAnalysis[] | null>(null);
+  const [progress, setProgress] = useState<Awaited<ReturnType<typeof fetchTopicProgress>>>([]);
+  const [analysisId, setAnalysisId] = useState<string>("");
+  const [start, setStart] = useState(todayISO());
+  const [levels, setLevels] = useState<DayLevel[]>(DEFAULT_LEVELS);
+  const [levelQuestions, setLevelQuestions] = useState<Record<DayLevel, number>>(
+    Object.fromEntries(DAY_LEVELS.map((l) => [l.value, l.questions])) as Record<DayLevel, number>,
+  );
+  const [daily, setDaily] = useState({ paragraf: 20, problem: 10, tekrar: true });
+  const [maxTopics, setMaxTopics] = useState(8);
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([fetchAnalyses(studentId), fetchTopicProgress(studentId)])
+      .then(([a, p]) => {
+        setAnalyses(a);
+        setProgress(p);
+        const pre = initialAnalysisId && a.find((x) => x.id === initialAnalysisId);
+        if (pre) setAnalysisId(pre.id);
+        else if (a[0]) setAnalysisId(a[0].id);
+      })
+      .catch((e) => setError(errorText(e)));
+  }, [studentId, initialAnalysisId]);
+
+  const analysis = analyses?.find((a) => a.id === analysisId) ?? null;
+  const result = useMemo(
+    () => buildPlan({ levels, levelQuestions, analysis, progress, daily, maxTopics, excluded }),
+    [levels, levelQuestions, analysis, progress, daily, maxTopics, excluded],
+  );
+
+  async function create() {
+    setError(null);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return setError("Geçerli bir başlangıç tarihi seçin.");
+    if (!result.tasks.length) return setError("Oluşturulacak görev yok. Müsait gün seçin veya deneme analizi girin.");
+    setBusy(true);
+    try {
+      let plan = plans.find((p) => p.start_date === start) ?? null;
+      if (plan) {
+        const { count } = await sb().from("plan_tasks").select("id", { count: "exact", head: true }).eq("plan_id", plan.id);
+        if (count && !confirmAction(`${formatTR(start)} haftasında zaten ${count} görev var. Yeni görevler bunlara eklensin mi?`)) {
+          setBusy(false);
+          return;
+        }
+        await sb().from("weekly_plans").update({ day_levels: levels, analysis_id: analysis?.id ?? null }).eq("id", plan.id);
+      } else {
+        const { data, error } = await sb()
+          .from("weekly_plans")
+          .insert({ student_id: studentId, start_date: start, day_levels: levels, analysis_id: analysis?.id ?? null, title: analysis ? `${analysis.title} sonrası` : null })
+          .select("*")
+          .single();
+        if (error) throw error;
+        plan = data as WeeklyPlan;
+      }
+      const rows = result.tasks.map((t: DraftTask) => ({ ...t, plan_id: (plan as WeeklyPlan).id, student_id: studentId, done: false }));
+      const { error: e2 } = await sb().from("plan_tasks").insert(rows);
+      if (e2) throw e2;
+      toast.show(`${rows.length} görev oluşturuldu`);
+      onCreated((plan as WeeklyPlan).id);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  const dates = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Otomatik haftalık program"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button icon="check" onClick={create} loading={busy} disabled={!analyses}>
+            Programı oluştur ({result.tasks.length} görev)
+          </Button>
+        </>
+      }
+    >
+      {!analyses ? (
+        <PageLoader />
+      ) : (
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Başlangıç tarihi" htmlFor="g-start" hint={`${dayName(start)} → ${dayName(addDays(start, 6))}`}>
+              <input id="g-start" type="date" className="field" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
+            </Field>
+            <Field label="Deneme analizi" htmlFor="g-analysis" hint={analyses.length ? "Yanlış/boş sayısına göre konu ve soru dağılımı" : "Henüz analiz yok — Denemeler sekmesinden ekleyin"}>
+              <select
+                id="g-analysis"
+                className="field"
+                value={analysisId}
+                onChange={(e) => {
+                  setAnalysisId(e.target.value);
+                  setExcluded([]);
+                }}
+              >
+                <option value="">Analiz kullanma (çalışılan konular)</option>
+                {analyses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {formatTR(a.exam_date)} · {a.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-sm font-medium">Müsait günler</p>
+            <p className="mb-2 text-xs text-muted">Okulda boş saati çok olan günleri “Yoğun”, dinlenme gününü “Kapalı” yap.</p>
+            <div className="space-y-1.5">
+              {dates.map((d, i) => (
+                <div key={d} className="flex items-center gap-2">
+                  <span className="w-24 shrink-0 text-sm">
+                    {dayShort(d)} <span className="text-xs text-faint">{formatShort(d)}</span>
+                  </span>
+                  <div className="flex-1">
+                    <Segmented
+                      size="sm"
+                      ariaLabel={`${dayName(d)} müsaitlik`}
+                      value={levels[i]}
+                      onChange={(v) => setLevels((ls) => ls.map((x, j) => (j === i ? v : x)))}
+                      options={DAY_LEVELS.map((l) => ({ value: l.value, label: l.label }))}
+                    />
+                  </div>
+                  <span className="w-12 text-right text-xs tabular text-muted">{result.dayTargets[i] || "—"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+              Günlük soru hedefi:
+              {DAY_LEVELS.filter((l) => l.value !== "kapali").map((l) => (
+                <label key={l.value} className="flex items-center gap-1">
+                  {l.label}
+                  <input
+                    inputMode="numeric"
+                    className="field h-8 w-16 px-2 py-1 text-center text-sm"
+                    value={levelQuestions[l.value]}
+                    onChange={(e) => setLevelQuestions((q) => ({ ...q, [l.value]: Math.min(600, Number(e.target.value.replace(/[^\d]/g, "")) || 0) }))}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Her gün sabit</p>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <label className="flex items-center gap-1.5">
+                Paragraf
+                <input
+                  inputMode="numeric"
+                  className="field h-8 w-16 px-2 py-1 text-center"
+                  value={daily.paragraf}
+                  onChange={(e) => setDaily((d) => ({ ...d, paragraf: Number(e.target.value.replace(/[^\d]/g, "")) || 0 }))}
+                />
+              </label>
+              <label className="flex items-center gap-1.5">
+                Problem
+                <input
+                  inputMode="numeric"
+                  className="field h-8 w-16 px-2 py-1 text-center"
+                  value={daily.problem}
+                  onChange={(e) => setDaily((d) => ({ ...d, problem: Number(e.target.value.replace(/[^\d]/g, "")) || 0 }))}
+                />
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" className="h-4 w-4" checked={daily.tekrar} onChange={(e) => setDaily((d) => ({ ...d, tekrar: e.target.checked }))} />
+                Günlük tekrar
+              </label>
+              <label className="flex items-center gap-1.5">
+                En fazla
+                <input
+                  inputMode="numeric"
+                  className="field h-8 w-14 px-2 py-1 text-center"
+                  value={maxTopics}
+                  onChange={(e) => setMaxTopics(Math.min(20, Math.max(1, Number(e.target.value.replace(/[^\d]/g, "")) || 1)))}
+                />
+                öncelikli konu
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-baseline justify-between">
+              <p className="text-sm font-medium">Öncelikli konular</p>
+              <p className="text-xs text-muted tabular">Haftalık toplam: {fmtNum(result.total, 0)} soru</p>
+            </div>
+            {result.priorities.length === 0 ? (
+              <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">
+                {analysis ? "Bu analizde yanlış/boş girilmiş konu yok." : "“Çalışılıyor” durumunda konu yok. Deneme analizi girersen konular otomatik seçilir."}
+              </p>
+            ) : (
+              <ul className="divide-y divide-line rounded-xl border border-line">
+                {result.priorities.map((p) => (
+                  <li key={p.topic_id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{p.name}</p>
+                      <p className="text-xs text-muted">
+                        {p.subject}
+                        {p.wrong || p.empty ? ` · ${p.wrong} yanlış, ${p.empty} boş` : ""} · kısa tekrar + soru
+                      </p>
+                    </div>
+                    <Badge tone="primary">{p.questions} soru</Badge>
+                    <IconButton icon="x" label="Konuyu çıkar" className="h-8 w-8" onClick={() => setExcluded((x) => [...x, p.topic_id])} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {excluded.length > 0 && (
+              <button className="mt-1 text-xs text-primary" onClick={() => setExcluded([])}>
+                Çıkarılan {excluded.length} konuyu geri al
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted">Oluşturduktan sonra tablo üzerinde her görevi değiştirebilir, silebilir veya yeni görev ekleyebilirsin.</p>
+          {error && <ErrorBox>{error}</ErrorBox>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ================================================================== */
+/* Boş hafta / kopyala                                                 */
+/* ================================================================== */
+function NewPlanModal({
+  open,
+  onClose,
+  studentId,
+  copyFrom,
+  copyTasks,
+  isCounselor,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  studentId: string;
+  copyFrom: WeeklyPlan | null;
+  copyTasks: PlanTask[];
+  isCounselor: boolean;
+  onCreated: (id: string) => void;
+}) {
+  const toast = useToast();
+  const [start, setStart] = useState(todayISO());
+  const [title, setTitle] = useState("");
+  const [copy, setCopy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setStart(copyFrom ? addDays(copyFrom.start_date, 7) : todayISO());
+      setTitle("");
+      setCopy(false);
+      setError(null);
+    }
+  }, [open, copyFrom]);
+
+  async function create() {
+    setError(null);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return setError("Geçerli bir başlangıç tarihi seçin.");
+    setBusy(true);
+    const { data, error } = await sb()
+      .from("weekly_plans")
+      .insert({ student_id: studentId, start_date: start, title: title.trim().slice(0, 120) || null, day_levels: levelsOf(copyFrom) })
+      .select("*")
+      .single();
+    if (error) {
+      setBusy(false);
+      return setError(/duplicate|unique/i.test(error.message) ? "Bu tarihte başlayan bir program zaten var." : errorText(error));
+    }
+    const np = data as WeeklyPlan;
+    if (copy && copyTasks.length) {
+      const rows = copyTasks.filter(hasText).map((t) => ({
+        plan_id: np.id,
+        student_id: studentId,
+        day_index: t.day_index,
+        subject: t.subject,
+        content: t.content,
+        topic_id: t.topic_id,
+        task_type: t.task_type,
+        target_questions: t.target_questions,
+        sort: t.sort,
+        done: false,
+      }));
+      const { error: e3 } = await sb().from("plan_tasks").insert(rows);
+      if (e3) toast.show("Görevler kopyalanamadı: " + errorText(e3), "danger");
+    }
+    setBusy(false);
+    toast.show("Hafta oluşturuldu");
+    onCreated(np.id);
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Yeni hafta"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button onClick={create} loading={busy} icon="check">
+            Oluştur
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Programın veriliş (başlangıç) tarihi" hint={`7 gün sürer: ${dayName(start)} → ${dayName(addDays(start, 6))}`} htmlFor="np-start">
+          <input id="np-start" type="date" className="field" value={start} onChange={(e) => setStart(e.target.value)} />
+        </Field>
+        <Field label="Başlık (isteğe bağlı)" htmlFor="np-title">
+          <input
+            id="np-title"
+            className="field"
+            value={title}
+            maxLength={120}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={isCounselor ? "ör. Deneme haftası" : "ör. Tatil programı"}
+          />
+        </Field>
+        {copyFrom && (
+          <label className="flex items-start gap-3 rounded-xl bg-surface-2 p-3 text-sm">
+            <input type="checkbox" className="mt-0.5 h-5 w-5" checked={copy} onChange={(e) => setCopy(e.target.checked)} />
+            <span>
+              Görüntülenen haftanın görevlerini kopyala
+              <span className="block text-xs text-muted">{formatTR(copyFrom.start_date)} haftasındaki görevler, tamamlanmamış olarak aktarılır.</span>
+            </span>
+          </label>
+        )}
+        {error && <ErrorBox>{error}</ErrorBox>}
+      </div>
+    </Modal>
+  );
+}
+
+/* ================================================================== */
 function DayDetails({
   plan,
   dayIndex,
   studentId,
   current,
   onSaved,
+  solvedTotal,
 }: {
   plan: WeeklyPlan;
   dayIndex: number;
   studentId: string;
+  solvedTotal: number;
   current: PlanDay | null;
   onSaved: (d: PlanDay) => void;
 }) {
@@ -487,7 +1367,6 @@ function DayDetails({
   const [notes, setNotes] = useState(current?.notes ?? "");
   const [blocks, setBlocks] = useState<TimeBlock[]>(current?.time_blocks ?? []);
   const [minutes, setMinutes] = useState<string>(current?.study_minutes != null ? String(current.study_minutes) : "");
-  const [questions, setQuestions] = useState<string>(current?.question_count != null ? String(current.question_count) : "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -502,9 +1381,8 @@ function DayDetails({
 
   async function save() {
     const m = minutes.trim() === "" ? null : Math.max(0, Math.min(1440, Math.round(Number(minutes))));
-    const q = questions.trim() === "" ? null : Math.max(0, Math.min(5000, Math.round(Number(questions))));
-    if ((m != null && Number.isNaN(m)) || (q != null && Number.isNaN(q))) {
-      toast.show("Süre ve soru sayısı sayı olmalı", "danger");
+    if (m != null && Number.isNaN(m)) {
+      toast.show("Süre sayı olmalı", "danger");
       return;
     }
     setSaving(true);
@@ -522,7 +1400,6 @@ function DayDetails({
           notes: notes.slice(0, 2000),
           time_blocks: cleanBlocks,
           study_minutes: m,
-          question_count: q,
         },
         { onConflict: "plan_id,day_index" },
       )
@@ -536,7 +1413,7 @@ function DayDetails({
   }
 
   return (
-    <Card title="Gün sonu" subtitle="Notlar, zaman aralıkları, toplam süre ve soru sayısı">
+    <Card title="Gün sonu" subtitle="Notlar, zaman aralıkları ve toplam çalışma süresi">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Toplam çalışma (dk)" htmlFor={`min-${dayIndex}`}>
@@ -552,19 +1429,11 @@ function DayDetails({
               placeholder="ör. 360"
             />
           </Field>
-          <Field label="Toplam soru" htmlFor={`q-${dayIndex}`}>
-            <input
-              id={`q-${dayIndex}`}
-              className="field"
-              inputMode="numeric"
-              value={questions}
-              onChange={(e) => {
-                setQuestions(e.target.value.replace(/[^\d]/g, ""));
-                mark();
-              }}
-              placeholder="ör. 250"
-            />
-          </Field>
+          <div className="space-y-1.5">
+            <span className="block text-sm font-medium">Çözülen soru</span>
+            <div className="field flex items-center bg-surface-2 tabular">{solvedTotal || "—"}</div>
+            <p className="text-xs text-faint">Görevlere girilen sayılardan otomatik</p>
+          </div>
         </div>
         {minutes && <p className="-mt-2 text-xs text-faint">{minutesToText(Number(minutes))}</p>}
 
@@ -665,206 +1534,3 @@ function DayDetails({
   );
 }
 
-/* ------------------------------------------------------------------ */
-function WeekTable({
-  plan,
-  tasks,
-  days,
-  onPick,
-}: {
-  plan: WeeklyPlan;
-  tasks: PlanTask[];
-  days: PlanDay[];
-  onPick: (dayIndex: number) => void;
-}) {
-  const withContent = tasks.filter(hasContent);
-  const subjects = [...new Set(withContent.map((t) => t.subject))].sort((a, b) => subjectOrder(a) - subjectOrder(b));
-  if (!subjects.length) {
-    return (
-      <Card>
-        <p className="py-6 text-center text-sm text-muted">Bu programda henüz görev yok.</p>
-      </Card>
-    );
-  }
-  const dates = Array.from({ length: 7 }, (_, i) => addDays(plan.start_date, i));
-  return (
-    <div className="card overflow-x-auto">
-      <table className="w-full min-w-[860px] border-collapse text-sm">
-        <thead>
-          <tr className="bg-surface-2 text-left">
-            <th className="sticky left-0 z-10 w-36 bg-surface-2 px-3 py-2 text-xs font-semibold text-muted">DERSLER</th>
-            {dates.map((d, i) => (
-              <th key={d} className="px-2 py-2 text-xs font-semibold">
-                <button className="text-left hover:text-primary" onClick={() => onPick(i)}>
-                  {dayName(d).toLocaleUpperCase("tr-TR")}
-                  <span className="block font-normal text-faint">{formatShort(d)}</span>
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {subjects.map((s) => (
-            <tr key={s} className="border-t border-line align-top">
-              <th scope="row" className="sticky left-0 z-10 bg-surface px-3 py-2 text-left text-[11px] font-semibold text-muted">
-                {s}
-              </th>
-              {dates.map((_, i) => {
-                const t = withContent.find((x) => x.subject === s && x.day_index === i);
-                return (
-                  <td key={i} className={cx("border-l border-line px-2 py-2", t?.done && "bg-success-soft")}>
-                    {t && (
-                      <span className="flex items-start gap-1">
-                        {t.done ? (
-                          <Icon name="check" size={14} className="mt-0.5 shrink-0 text-success" strokeWidth={3} />
-                        ) : (
-                          <span className="mt-1 h-3 w-3 shrink-0 rounded-sm border-2 border-line" />
-                        )}
-                        <span className="line-clamp-3">{t.content}</span>
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-          <tr className="border-t-2 border-line bg-surface-2">
-            <th scope="row" className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-left text-[11px] font-semibold text-muted">
-              ÇALIŞMA SÜRESİ
-            </th>
-            {dates.map((_, i) => (
-              <td key={i} className="border-l border-line px-2 py-2 tabular">
-                {minutesToText(days.find((d) => d.day_index === i)?.study_minutes)}
-              </td>
-            ))}
-          </tr>
-          <tr className="border-t border-line bg-surface-2">
-            <th scope="row" className="sticky left-0 z-10 bg-surface-2 px-3 py-2 text-left text-[11px] font-semibold text-muted">
-              SORU SAYISI
-            </th>
-            {dates.map((_, i) => (
-              <td key={i} className="border-l border-line px-2 py-2 tabular">
-                {days.find((d) => d.day_index === i)?.question_count ?? "—"}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-function NewPlanModal({
-  open,
-  onClose,
-  studentId,
-  copyFrom,
-  isCounselor,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  studentId: string;
-  copyFrom: WeeklyPlan | null;
-  isCounselor: boolean;
-  onCreated: (id: string) => void;
-}) {
-  const toast = useToast();
-  const [start, setStart] = useState(todayISO());
-  const [title, setTitle] = useState("");
-  const [copy, setCopy] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setStart(todayISO());
-      setTitle("");
-      setCopy(Boolean(copyFrom));
-      setError(null);
-    }
-  }, [open, copyFrom]);
-
-  async function create() {
-    setError(null);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-      setError("Geçerli bir başlangıç tarihi seçin.");
-      return;
-    }
-    setBusy(true);
-    const { data, error } = await sb()
-      .from("weekly_plans")
-      .insert({ student_id: studentId, start_date: start, title: title.trim().slice(0, 120) || null })
-      .select("*")
-      .single();
-    if (error) {
-      setBusy(false);
-      setError(/duplicate|unique/i.test(error.message) ? "Bu tarihte başlayan bir program zaten var." : errorText(error));
-      return;
-    }
-    const newPlan = data as WeeklyPlan;
-    if (copy && copyFrom) {
-      const { data: src, error: e2 } = await sb().from("plan_tasks").select("day_index, subject, content").eq("plan_id", copyFrom.id);
-      if (!e2 && src && src.length) {
-        const rows = (src as Pick<PlanTask, "day_index" | "subject" | "content">[])
-          .filter((t) => t.content.trim())
-          .map((t) => ({ ...t, plan_id: newPlan.id, student_id: studentId, done: false }));
-        const { error: e3 } = await sb().from("plan_tasks").insert(rows);
-        if (e3) toast.show("Görevler kopyalanamadı: " + errorText(e3), "danger");
-      }
-    }
-    setBusy(false);
-    toast.show("Program oluşturuldu");
-    onCreated(newPlan.id);
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Yeni haftalık program"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Vazgeç
-          </Button>
-          <Button onClick={create} loading={busy} icon="check">
-            Oluştur
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <Field label="Programın veriliş (başlangıç) tarihi" hint={`7 gün sürer: ${dayName(start)} → ${dayName(addDays(start, 6))}`} htmlFor="np-start">
-          <input id="np-start" type="date" className="field" value={start} onChange={(e) => setStart(e.target.value)} />
-        </Field>
-        <Field label="Başlık (isteğe bağlı)" htmlFor="np-title">
-          <input
-            id="np-title"
-            className="field"
-            value={title}
-            maxLength={120}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={isCounselor ? "ör. Deneme haftası" : "ör. Tatil programı"}
-          />
-        </Field>
-        {copyFrom && (
-          <label className="flex items-start gap-3 rounded-xl bg-surface-2 p-3 text-sm">
-            <input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--primary)]" checked={copy} onChange={(e) => setCopy(e.target.checked)} />
-            <span>
-              Görevleri mevcut programdan kopyala
-              <span className="block text-xs text-muted">
-                {formatTR(copyFrom.start_date)} programındaki görevler tamamlanmamış olarak aktarılır.
-              </span>
-            </span>
-          </label>
-        )}
-        {error && <ErrorBox>{error}</ErrorBox>}
-        <Badge tone="primary" icon="info">
-          Hem öğrenci hem danışman programı düzenleyebilir
-        </Badge>
-      </div>
-    </Modal>
-  );
-}

@@ -33,6 +33,8 @@ export type WeeklyPlan = {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  day_levels: DayLevel[];
+  analysis_id: string | null;
 };
 
 export type PlanTask = {
@@ -46,7 +48,75 @@ export type PlanTask = {
   done_at: string | null;
   created_by: string | null;
   updated_by: string | null;
+  topic_id: string | null;
+  task_type: TaskType;
+  target_questions: number | null;
+  solved: number | null;
+  correct: number | null;
+  wrong: number | null;
+  sort: number;
 };
+
+/** İçeriği olan (boş olmayan) görev mi? */
+export const isRealTask = (t: Pick<PlanTask, "topic_id" | "content" | "target_questions">) =>
+  Boolean(t.topic_id || t.content.trim() || t.target_questions);
+
+export type TaskType = "konu" | "soru" | "tekrar" | "deneme" | "diger";
+
+export const TASK_TYPES: { value: TaskType; label: string; short: string }[] = [
+  { value: "soru", label: "Soru çözümü", short: "Soru" },
+  { value: "konu", label: "Konu çalışma", short: "Konu" },
+  { value: "tekrar", label: "Konu tekrarı", short: "Tekrar" },
+  { value: "deneme", label: "Deneme", short: "Deneme" },
+  { value: "diger", label: "Diğer", short: "Diğer" },
+];
+
+/** Günlük müsaitlik (okuldaki boş saatlere göre) */
+export type DayLevel = "kapali" | "hafif" | "normal" | "yogun";
+export const DAY_LEVELS: { value: DayLevel; label: string; questions: number }[] = [
+  { value: "kapali", label: "Kapalı", questions: 0 },
+  { value: "hafif", label: "Hafif", questions: 60 },
+  { value: "normal", label: "Normal", questions: 120 },
+  { value: "yogun", label: "Yoğun", questions: 200 },
+];
+
+export type ExamAnalysis = {
+  id: string;
+  student_id: string;
+  exam_date: string;
+  title: string;
+  exam_type: "TYT" | "AYT" | "BRANS";
+  nets: Record<string, { d?: number | null; y?: number | null }>;
+  results: { topic_id: string; wrong?: number; empty?: number }[];
+  file_path: string | null;
+  notes: string;
+  created_at: string;
+};
+
+/** Deneme netleri için bölümler */
+export const EXAM_SECTIONS: Record<ExamAnalysis["exam_type"], { name: string; count: number }[]> = {
+  TYT: [
+    { name: "Türkçe", count: 40 },
+    { name: "Sosyal", count: 20 },
+    { name: "Matematik", count: 40 },
+    { name: "Fen", count: 20 },
+  ],
+  AYT: [
+    { name: "Matematik", count: 40 },
+    { name: "Fizik", count: 14 },
+    { name: "Kimya", count: 13 },
+    { name: "Biyoloji", count: 13 },
+    { name: "Edebiyat", count: 24 },
+    { name: "Tarih-1", count: 10 },
+    { name: "Coğrafya-1", count: 6 },
+  ],
+  BRANS: [{ name: "Branş", count: 40 }],
+};
+
+export function net(d?: number | null, y?: number | null): number | null {
+  if (d == null && y == null) return null;
+  return Math.round(((d ?? 0) - (y ?? 0) / 4) * 100) / 100;
+}
 
 export type TimeBlock = { start: string; end: string; label: string };
 
@@ -291,6 +361,39 @@ export const DEFAULT_SUBJECTS = [
   "GÜNLÜK TEKRAR",
 ];
 
+// Ders satırı → konu takibindeki bölümler (görev eklerken konu seçimi için)
+export const SUBJECT_SECTIONS: Record<string, string[]> = {
+  "TÜRKÇE": ["tyt-turkce"],
+  "PARAGRAF": ["tyt-turkce"],
+  "TYT MATEMATİK": ["tyt-matematik"],
+  "PROBLEM": ["tyt-matematik"],
+  "AYT MATEMATİK": ["ayt-matematik"],
+  "GEOMETRİ": ["geometri"],
+  "EDEBİYAT": ["ayt-edebiyat"],
+  "TARİH": ["tyt-tarih", "ayt-tarih"],
+  "COĞRAFYA": ["tyt-cografya", "ayt-cografya"],
+  "FELSEFE": ["tyt-felsefe"],
+  "TYT FİZİK": ["tyt-fizik"],
+  "AYT FİZİK": ["ayt-fizik"],
+  "TYT KİMYA": ["tyt-kimya"],
+  "AYT KİMYA": ["ayt-kimya"],
+  "TYT BİYOLOJİ": ["tyt-biyoloji"],
+  "AYT BİYOLOJİ": ["ayt-biyoloji"],
+  "DİN KÜLTÜRÜ": ["tyt-din"],
+};
+
+/** Konu → programdaki ders satırı */
+export function subjectForTopic(topicId: string): string {
+  const section = topicId.split(".")[0];
+  if (topicId === "tyt-matematik.problemler") return "PROBLEM";
+  if (topicId.startsWith("tyt-turkce.paragrafta")) return "PARAGRAF";
+  for (const [subject, sections] of Object.entries(SUBJECT_SECTIONS)) {
+    if (subject === "PARAGRAF" || subject === "PROBLEM") continue;
+    if (sections.includes(section)) return subject;
+  }
+  return "DİĞER";
+}
+
 // "Ders ekle" listesinde önerilecek ek dersler
 export const EXTRA_SUBJECT_SUGGESTIONS = [
   "AYT FİZİK",
@@ -363,7 +466,7 @@ export function computeSignals(opts: {
   if (opts.plan && opts.tasks) {
     const elapsed = diffDays(opts.plan.start_date, today); // bugün hariç geçen gün sayısı
     if (elapsed >= 2 && elapsed <= 7) {
-      const due = opts.tasks.filter((t) => t.content.trim() && t.day_index < elapsed);
+      const due = opts.tasks.filter((t) => isRealTask(t) && t.day_index < elapsed);
       if (due.length >= 3) {
         const done = due.filter((t) => t.done).length;
         const p = Math.round((done / due.length) * 100);
