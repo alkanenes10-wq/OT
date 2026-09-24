@@ -55,7 +55,76 @@ export type PlanTask = {
   correct: number | null;
   wrong: number | null;
   sort: number;
+  start_time: string | null; // "17:00" — saatli programlarda blok başlangıcı
+  duration_min: number | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* Çalışma saatleri (danışman girer, öğrenci görür)                    */
+/* ------------------------------------------------------------------ */
+export type TimeRange = { s: string; e: string };
+export type StudySchedule = {
+  student_id: string;
+  slots: TimeRange[][]; // 0 = Pazartesi … 6 = Pazar
+  block_min: number;
+  break_min: number;
+  updated_at?: string;
+};
+export const WEEKDAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+export const emptySchedule = (studentId: string): StudySchedule => ({
+  student_id: studentId,
+  slots: [[], [], [], [], [], [], []],
+  block_min: 40,
+  break_min: 10,
+});
+/** Tarihin haftanın hangi günü olduğu (0 = Pazartesi) */
+export function weekdayIndex(iso: string): number {
+  return (parseISODate(iso).getDay() + 6) % 7;
+}
+export function rangeMinutes(r: TimeRange[]): number {
+  return r.reduce((s, x) => {
+    const a = timeToMinutes(x.s);
+    const b = timeToMinutes(x.e);
+    return a != null && b != null && b > a ? s + b - a : s;
+  }, 0);
+}
+export function minutesToTime(m: number): string {
+  const h = Math.floor(m / 60) % 24;
+  return `${String(h).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sayısal / sözel ve alanlara göre dersler                            */
+/* ------------------------------------------------------------------ */
+export type Category = "sayisal" | "sozel";
+export const SAYISAL_SECTIONS = [
+  "tyt-matematik",
+  "ayt-matematik",
+  "geometri",
+  "tyt-fizik",
+  "ayt-fizik",
+  "tyt-kimya",
+  "ayt-kimya",
+  "tyt-biyoloji",
+  "ayt-biyoloji",
+];
+export const categoryOfSection = (sectionId: string): Category => (SAYISAL_SECTIONS.includes(sectionId) ? "sayisal" : "sozel");
+export function categoryOfSubject(subject: string): Category | null {
+  if (subject === "PROBLEM") return "sayisal";
+  if (subject === "PARAGRAF") return "sozel";
+  const secs = SUBJECT_SECTIONS[subject];
+  return secs?.length ? categoryOfSection(secs[0]) : null;
+}
+/** Alana göre programda yer alacak bölümler (TYT dahil yalnızca alan dersleri). Türkçe ve TYT matematik
+ * her alanda temel ders olduğundan sırasıyla SAY ve SÖZ'e "karşı kategori" olarak eklenir. */
+export const FIELD_SECTIONS: Record<string, string[]> = {
+  SAY: ["tyt-matematik", "ayt-matematik", "geometri", "tyt-fizik", "ayt-fizik", "tyt-kimya", "ayt-kimya", "tyt-biyoloji", "ayt-biyoloji", "tyt-turkce"],
+  EA: ["tyt-matematik", "ayt-matematik", "geometri", "tyt-turkce", "ayt-edebiyat", "tyt-tarih", "ayt-tarih", "tyt-cografya", "ayt-cografya"],
+  "SÖZ": ["tyt-matematik", "tyt-turkce", "ayt-edebiyat", "tyt-tarih", "ayt-tarih", "tyt-cografya", "ayt-cografya", "tyt-felsefe", "tyt-din"],
+  "DİL": ["tyt-matematik", "geometri", "tyt-turkce"],
+  TYT: ["tyt-matematik", "geometri", "tyt-fizik", "tyt-kimya", "tyt-biyoloji", "tyt-turkce", "tyt-tarih", "tyt-cografya", "tyt-felsefe", "tyt-din"],
+};
+export const sectionsForField = (field: string | null | undefined) => FIELD_SECTIONS[field ?? ""] ?? FIELD_SECTIONS.TYT;
 
 /** İçeriği olan (boş olmayan) görev mi? */
 export const isRealTask = (t: Pick<PlanTask, "topic_id" | "content" | "target_questions">) =>

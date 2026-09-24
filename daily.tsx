@@ -233,7 +233,10 @@ export function DailyLogSection({ studentId, studentName }: { studentId: string;
   const load = useCallback(() => {
     fetchLogs(studentId, addDays(todayISO(), -120))
       .then(setLogs)
-      .catch((e) => setError(errorText(e)));
+      .catch((e) => {
+        setLogs([]);
+        setError(errorText(e));
+      });
   }, [studentId]);
 
   useEffect(() => {

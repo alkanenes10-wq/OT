@@ -7,6 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
+- `guncelleme-2.sql`, `guncelleme-3.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -54,6 +55,17 @@ Bu sürümü mevcut kuruluma yüklerken **bir kez** şunu yap: Supabase → SQL 
 - **Denemeler sekmesi:** kazanım karnesini (PDF) yükle; netler ve konu konu yanlış/boş sayıları otomatik okunur (gerekirse elle düzeltilir).
 - **Otomatik program oluştur:** son denemedeki yanlış/boşlara ve müsait günlere göre her öncelikli konu için kısa konu tekrarı + soru çözümü dağıtır, günlük/haftalık hedef soruyu hesaplar. Sonra tabloda istediğin gibi düzenlersin. Soru hedefleri ve konu başına üst sınır `planner.ts` içinde.
 - **Otomatik konu takibi:** görev tamamlanınca (ya da öğrenci hedef soru sayısına ulaşınca) konu takibi güncellenir: Konu → Bitti, Soru → Çalışılıyor, Tekrar → Tekrar edildi. Hiçbir zaman geri almaz.
+
+## Güncelleme 4 — çalışma saatleri ve saatli program
+
+Bu sürümü yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-3.sql` dosyasının tamamını yapıştır → **Run** (veri silmez). Sonra tüm dosyaları GitHub'a yükle (yeni dosya: `schedule.tsx`).
+
+- **Saatler sekmesi (danışman):** Her gün için çalışma saat aralıkları (ör. 17:00–19:30, 20:00–22:00), blok süresi (varsayılan 40 dk) ve mola (10 dk). Öğrenci bu saatleri Program sayfasında yalnızca görür.
+- **Otomatik program:** Saatler bloklara bölünür; her blok bir konu. Bloklar **bir sayısal, bir sözel** sırasıyla dizilir (istersen 2 sayısal–1 sözel / 1 sayısal–2 sözel).
+- **Alana göre dersler** (TYT dahil): SAY → Mat, Geo, Fizik, Kimya, Biyoloji (+ Türkçe); EA → Mat, Geo, Türkçe, Edebiyat, Tarih, Coğrafya; SÖZ → Türkçe, Edebiyat, Tarih, Coğrafya, Felsefe, Din (+ TYT Mat). Oluştururken ders kutucuklarından değiştirilebilir. Liste: `lib.ts` → `FIELD_SECTIONS`.
+- **TYT ve AYT ayrı:** son TYT ve son AYT denemesi ayrı seçilir; bloklar TYT/AYT oranına göre dağılır (11. sınıf varsayılan TYT %70, 12/mezun %50).
+- **Önceki programlar:** geçen haftadan tamamlanmayan konular öne alınır, geçen hafta konu çalışması yapılan konulara bu hafta soru verilir, uzun süredir görülmeyen bitmiş konular tekrar edilir, her dersin sıradaki başlanmamış konusu "yeni konu" olarak eklenir.
+- Aynı haftaya yeniden oluşturursan tamamlanmamış görevler silinip yenisi yazılır, tamamlananlar kalır. Sayısal dersler tabloda mavi, sözel dersler turuncu çizgiyle gösterilir.
 
 ## Güncelleme 3 — karne kodla okunur
 

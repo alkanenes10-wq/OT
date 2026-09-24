@@ -10,6 +10,7 @@ import { SignalChips, StudentInsights } from "./insights";
 import { isRealTask, addDays, avg, computeSignals, type CounselorNote, type DailyLog, FIELDS, fmtNum, formatLong, GRADES, normalizeUsername, pct, pickCurrentPlan, type PlanTask, type Profile, relativeDay, type Signal, todayISO, type TopicProgress, USERNAME_RE, type WeeklyPlan } from "./lib";
 import { WeeklyPlanView } from "./plan";
 import { ExamAnalyses } from "./exams";
+import { ScheduleSection } from "./schedule";
 import { PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast } from "./ui";
@@ -684,10 +685,11 @@ function NewStudent() {
   );
 }
 
-type Tab = "ozet" | "program" | "denemeler" | "gunluk" | "konular" | "notlar" | "hesap";
-const TABS: { value: Tab; label: string; icon: "chart" | "calendar" | "target" | "journal" | "book" | "note" | "user" }[] = [
+type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "notlar" | "hesap";
+const TABS: { value: Tab; label: string; icon: "chart" | "calendar" | "clock" | "target" | "journal" | "book" | "note" | "user" }[] = [
   { value: "ozet", label: "Özet", icon: "chart" },
   { value: "program", label: "Program", icon: "calendar" },
+  { value: "saatler", label: "Saatler", icon: "clock" },
   { value: "denemeler", label: "Denemeler", icon: "target" },
   { value: "gunluk", label: "Günlük", icon: "journal" },
   { value: "konular", label: "Konular", icon: "book" },
@@ -748,7 +750,12 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
 
       <div className="pt-1">
         {tab === "ozet" && <StudentInsights studentId={student.id} showSignals />}
-        {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} />}
+        {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} field={student.field} />}
+        {tab === "saatler" && (
+          <div className="max-w-3xl">
+            <ScheduleSection key={student.id} studentId={student.id} editable />
+          </div>
+        )}
         {tab === "denemeler" && (
           <div className="max-w-3xl">
             <ExamAnalyses studentId={student.id} />

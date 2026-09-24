@@ -216,7 +216,10 @@ export async function analyzeKarne(token: string, studentId: string, filePath: s
     if (!isPdf) throw new Fail("Fotoğraf karneler kodla okunamaz. Yayınevinin verdiği orijinal PDF'i yükleyin veya sonuçları elle girin.");
 
     const { parseKarne, toLines } = await import("./karne");
-    const pages = await pdfText(bytes);
+    const pages = await Promise.race([
+      pdfText(bytes),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Fail("PDF okunması çok uzun sürdü. Dosyayı kontrol edin veya sonuçları elle girin.")), 45_000)),
+    ]);
     const lines = toLines(pages);
     if (lines.length < 5) throw new Fail("PDF'te okunabilir metin yok (taranmış/fotoğraf PDF). Orijinal PDF'i yükleyin veya sonuçları elle girin.");
 

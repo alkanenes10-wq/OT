@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS, COURSES } from "./curriculum";
-import { errorText, fetchAnalyses, fetchPlanDetail, fetchPlans, fetchTopicProgress, sb, useAuth } from "./db";
+import { errorText, fetchAnalyses, fetchPlanDetail, fetchPlans, fetchSchedule, fetchTopicProgress, sb, useAuth, useRoute } from "./db";
 import {
   DAY_LEVELS,
   DEFAULT_SUBJECTS,
@@ -12,6 +12,8 @@ import {
   SUBJECT_SECTIONS,
   TASK_TYPES,
   addDays,
+  categoryOfSection,
+  categoryOfSubject,
   dayName,
   dayShort,
   diffDays,
@@ -23,17 +25,21 @@ import {
   parseISODate,
   pct,
   pickCurrentPlan,
+  rangeMinutes,
+  sectionsForField,
   timeToMinutes,
   todayISO,
   type DayLevel,
   type ExamAnalysis,
   type PlanDay,
   type PlanTask,
+  type StudySchedule,
   type TaskType,
   type TimeBlock,
+  type TopicProgress,
   type WeeklyPlan,
 } from "./lib";
-import { buildPlan, type DraftTask } from "./planner";
+import { buildTimedPlan, type DraftTask, type HistoryTask } from "./planner";
 import {
   Badge,
   Button,
@@ -69,11 +75,41 @@ const levelsOf = (p: WeeklyPlan | null): DayLevel[] =>
   Array.isArray(p?.day_levels) && p.day_levels.length === 7 ? p.day_levels : DEFAULT_LEVELS;
 const levelQ = (l: DayLevel) => DAY_LEVELS.find((x) => x.value === l)?.questions ?? 0;
 
+/** Tablo satır sırası: önce sayısal, sonra sözel dersler, en sonda rutinler */
+const GRID_SUBJECTS = [
+  "TYT MATEMATİK",
+  "AYT MATEMATİK",
+  "GEOMETRİ",
+  "TYT FİZİK",
+  "AYT FİZİK",
+  "TYT KİMYA",
+  "AYT KİMYA",
+  "TYT BİYOLOJİ",
+  "AYT BİYOLOJİ",
+  "TÜRKÇE",
+  "EDEBİYAT",
+  "TARİH",
+  "COĞRAFYA",
+  "FELSEFE",
+  "DİN KÜLTÜRÜ",
+  "PARAGRAF",
+  "PROBLEM",
+  "GÜNLÜK TEKRAR",
+];
 export function subjectOrder(s: string) {
-  const i = DEFAULT_SUBJECTS.indexOf(s);
+  const i = GRID_SUBJECTS.indexOf(s);
   return i === -1 ? 100 : i;
 }
-const byOrder = (a: PlanTask, b: PlanTask) => a.day_index - b.day_index || subjectOrder(a.subject) - subjectOrder(b.subject) || a.sort - b.sort;
+/** Saatli görevler saat sırasıyla, saatsizler ders sırasıyla (sonda) */
+export const byOrder = (a: PlanTask, b: PlanTask) =>
+  a.day_index - b.day_index ||
+  (a.start_time && b.start_time ? a.start_time.localeCompare(b.start_time) : a.start_time ? -1 : b.start_time ? 1 : 0) ||
+  subjectOrder(a.subject) - subjectOrder(b.subject) ||
+  a.sort - b.sort;
+const catBorder = (subject: string) => {
+  const c = categoryOfSubject(subject);
+  return c === "sayisal" ? "border-say" : c === "sozel" ? "border-soz" : "border-line";
+};
 
 /** Görev alanlarını günceller; veritabanının hesapladığı son hali döner (ör. hedefe ulaşınca otomatik tamamlandı) */
 export async function patchTask(id: string, patch: Partial<PlanTask>): Promise<PlanTask> {
@@ -83,7 +119,7 @@ export async function patchTask(id: string, patch: Partial<PlanTask>): Promise<P
 }
 
 /* ================================================================== */
-export function WeeklyPlanView({ studentId }: { studentId: string }) {
+export function WeeklyPlanView({ studentId, field }: { studentId: string; field?: string | null }) {
   const toast = useToast();
   const { profile } = useAuth();
   const isCounselor = profile?.role === "counselor";
@@ -197,6 +233,8 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
       wrong: draft.wrong ?? null,
       content: (draft.content ?? "").trim().slice(0, 500),
       done: draft.done ?? false,
+      start_time: draft.start_time || null,
+      duration_min: draft.duration_min && draft.duration_min >= 5 ? draft.duration_min : null,
     };
     const q = draft.id
       ? sb().from("plan_tasks").update(payload).eq("id", draft.id)
@@ -306,6 +344,7 @@ export function WeeklyPlanView({ studentId }: { studentId: string }) {
           ) : view === "tablo" ? (
             <WeekGrid
               plan={plan}
+              field={field}
               tasks={real}
               days={days}
               onToggle={toggle}
@@ -401,6 +440,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 /* ================================================================== */
 function WeekGrid({
   plan,
+  field,
   tasks,
   days,
   onToggle,
@@ -410,6 +450,7 @@ function WeekGrid({
   onPickDay,
 }: {
   plan: WeeklyPlan;
+  field?: string | null;
   tasks: PlanTask[];
   days: PlanDay[];
   onToggle: (t: PlanTask) => void;
@@ -422,10 +463,23 @@ function WeekGrid({
   const [adding, setAdding] = useState("");
   const levels = levelsOf(plan);
   const dates = Array.from({ length: 7 }, (_, i) => addDays(plan.start_date, i));
-  const all = [...DEFAULT_SUBJECTS, ...tasks.map((t) => t.subject), ...extra];
+  const fieldSecs = field ? sectionsForField(field) : null;
+  const base = fieldSecs
+    ? GRID_SUBJECTS.filter((s) => !SUBJECT_SECTIONS[s] || s === "PARAGRAF" || s === "PROBLEM" ? true : SUBJECT_SECTIONS[s].some((x) => fieldSecs.includes(x)))
+    : DEFAULT_SUBJECTS;
+  const all = [...base, ...tasks.map((t) => t.subject), ...extra];
   const subjects = all.filter((s, i) => all.indexOf(s) === i).sort((a, b) => subjectOrder(a) - subjectOrder(b));
   const today = todayISO();
   const sum = (d: number, f: (t: PlanTask) => number) => tasks.filter((t) => t.day_index === d).reduce((s, t) => s + f(t), 0);
+  const plannedMin = (d: number) => sum(d, (t) => (t.start_time ? (t.duration_min ?? 0) : 0));
+  const timeSpan = (d: number) => {
+    const timed = tasks.filter((t) => t.day_index === d && t.start_time);
+    if (!timed.length) return "";
+    const first = timed.map((t) => t.start_time as string).sort()[0];
+    const ends = timed.map((t) => (timeToMinutes(t.start_time as string) ?? 0) + (t.duration_min ?? 0));
+    const e = Math.max(...ends);
+    return `${first}–${String(Math.floor(e / 60)).padStart(2, "0")}:${String(e % 60).padStart(2, "0")}`;
+  };
 
   return (
     <div className="space-y-2">
@@ -448,6 +502,7 @@ function WeekGrid({
                       {formatShort(d)}
                       {d === today ? " · bugün" : ""}
                     </span>
+                    {plannedMin(i) > 0 && <span className="block text-[10px] font-normal opacity-80 tabular">{timeSpan(i)} · {minutesToText(plannedMin(i))}</span>}
                   </button>
                 </th>
               ))}
@@ -478,7 +533,7 @@ function WeekGrid({
           <tbody>
             {subjects.map((s) => (
               <tr key={s} className="border-t border-line align-top">
-                <th scope="row" className="sticky left-0 z-10 bg-surface px-2 py-2 text-left text-[11px] font-semibold text-muted">
+                <th scope="row" className={cx("sticky left-0 z-10 border-l-[3px] bg-surface px-2 py-2 text-left text-[11px] font-semibold text-muted", catBorder(s))}>
                   {s}
                 </th>
                 {dates.map((d, i) => {
@@ -512,7 +567,7 @@ function WeekGrid({
               </th>
               {dates.map((d, i) => {
                 const t = sum(i, (x) => x.target_questions ?? 0);
-                const cap = levelQ(levels[i]);
+                const cap = plannedMin(i) > 0 ? 0 : levelQ(levels[i]);
                 return (
                   <td key={d} className="border-l border-line px-2 py-2 tabular">
                     {t || "—"}
@@ -599,6 +654,7 @@ function GridChip({ task, onToggle, onEdit }: { task: PlanTask; onToggle: (t: Pl
         {task.done && <Icon name="check" size={11} strokeWidth={3.5} />}
       </button>
       <button onClick={() => onEdit(task)} className="min-w-0 flex-1 text-left leading-tight" title={task.content || undefined}>
+        {task.start_time && <span className="mr-1 text-[10px] font-semibold text-muted tabular">{task.start_time}</span>}
         <span className={cx("mr-1 rounded px-1 text-[9px] font-bold uppercase", TYPE_TONE[task.task_type])}>{typeShort(task.task_type)}</span>
         <span className={cx(task.done && "text-muted")}>{taskTitle(task)}</span>
         {progress && <span className="ml-1 inline-block whitespace-nowrap text-[11px] font-semibold text-muted tabular">{progress}</span>}
@@ -748,7 +804,7 @@ export function TaskRow({
     if (n !== task.solved) onSolved(task, n);
   };
   return (
-    <div className="flex items-start gap-3 px-1 py-3">
+    <div className={cx("flex items-start gap-3 border-l-[3px] py-3 pl-2 pr-1", catBorder(task.subject))}>
       <button
         onClick={() => onToggle(task)}
         role="checkbox"
@@ -763,6 +819,12 @@ export function TaskRow({
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
+          {task.start_time && (
+            <span className="text-[12px] font-semibold tabular">
+              {task.start_time}
+              {task.duration_min ? <span className="font-normal text-muted"> · {task.duration_min} dk</span> : null}
+            </span>
+          )}
           <span className="text-[11px] font-semibold tracking-wide text-muted">{task.subject}</span>
           <span className={cx("rounded px-1.5 text-[10px] font-bold uppercase", TYPE_TONE[task.task_type])}>{typeShort(task.task_type)}</span>
         </div>
@@ -882,6 +944,24 @@ function TaskEditor({
             </select>
           </Field>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Saat (isteğe bağlı)" htmlFor="te-time">
+            <input id="te-time" type="time" className="field" value={t.start_time ?? ""} onChange={(e) => set({ start_time: e.target.value || null })} />
+          </Field>
+          <Field label="Süre (dk)" htmlFor="te-dur">
+            <input
+              id="te-dur"
+              inputMode="numeric"
+              className="field"
+              value={t.duration_min ?? ""}
+              placeholder="—"
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^\d]/g, "");
+                set({ duration_min: v ? Math.min(600, Number(v)) : null });
+              }}
+            />
+          </Field>
+        </div>
         <Field label="Görev türü">
           <div className="flex flex-wrap gap-1.5">
             {TASK_TYPES.map((x) => (
@@ -985,6 +1065,14 @@ function TaskEditor({
 /* ================================================================== */
 /* Otomatik program oluşturucu                                         */
 /* ================================================================== */
+const ALL_SECTIONS = COURSES.flatMap((c) => c.sections);
+
+function defaultShare(field: string | null, grade: string | null) {
+  if (field === "TYT" || field === "DİL") return 100;
+  if (grade && /^(9|10|11)\./.test(grade)) return 70;
+  return 50;
+}
+
 export function GeneratorModal({
   studentId,
   plans: plansProp,
@@ -998,70 +1086,133 @@ export function GeneratorModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
-  const [plans, setPlans] = useState<WeeklyPlan[]>(plansProp ?? []);
-  useEffect(() => {
-    if (!plansProp) fetchPlans(studentId).then(setPlans).catch(() => {});
-  }, [plansProp, studentId]);
   const toast = useToast();
-  const [analyses, setAnalyses] = useState<ExamAnalysis[] | null>(null);
-  const [progress, setProgress] = useState<Awaited<ReturnType<typeof fetchTopicProgress>>>([]);
-  const [analysisId, setAnalysisId] = useState<string>("");
+  const { go } = useRoute();
+  const [data, setData] = useState<{
+    plans: WeeklyPlan[];
+    analyses: ExamAnalysis[];
+    progress: TopicProgress[];
+    schedule: StudySchedule;
+    field: string | null;
+    grade: string | null;
+    history: HistoryTask[];
+  } | null>(null);
   const [start, setStart] = useState(todayISO());
-  const [levels, setLevels] = useState<DayLevel[]>(DEFAULT_LEVELS);
-  const [levelQuestions, setLevelQuestions] = useState<Record<DayLevel, number>>(
-    Object.fromEntries(DAY_LEVELS.map((l) => [l.value, l.questions])) as Record<DayLevel, number>,
-  );
-  const [daily, setDaily] = useState({ paragraf: 20, problem: 10, tekrar: true });
-  const [maxTopics, setMaxTopics] = useState(8);
+  const [tytId, setTytId] = useState("");
+  const [aytId, setAytId] = useState("");
+  const [sections, setSections] = useState<string[]>([]);
+  const [tytShare, setTytShare] = useState(50);
+  const [routines, setRoutines] = useState({ paragraf: true, problem: true });
+  const [carryOver, setCarryOver] = useState(true);
+  const [pattern, setPattern] = useState<"1-1" | "2-1" | "1-2">("1-1");
   const [excluded, setExcluded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchAnalyses(studentId), fetchTopicProgress(studentId)])
-      .then(([a, p]) => {
-        setAnalyses(a);
-        setProgress(p);
-        const pre = initialAnalysisId && a.find((x) => x.id === initialAnalysisId);
-        if (pre) setAnalysisId(pre.id);
-        else if (a[0]) setAnalysisId(a[0].id);
-      })
-      .catch((e) => setError(errorText(e)));
-  }, [studentId, initialAnalysisId]);
+    (async () => {
+      try {
+        const [plans, analyses, progress, schedule, prof] = await Promise.all([
+          plansProp ? Promise.resolve(plansProp) : fetchPlans(studentId),
+          fetchAnalyses(studentId),
+          fetchTopicProgress(studentId),
+          fetchSchedule(studentId),
+          sb().from("profiles").select("field, grade").eq("id", studentId).single(),
+        ]);
+        // Son 4 haftanın görevleri (önceki programlar)
+        const recent = plans.filter((p) => p.start_date >= addDays(todayISO(), -35));
+        let history: HistoryTask[] = [];
+        if (recent.length) {
+          const { data: rows, error } = await sb()
+            .from("plan_tasks")
+            .select("plan_id, topic_id, task_type, done")
+            .in("plan_id", recent.map((p) => p.id));
+          if (error) throw error;
+          const startOf = new Map(recent.map((p) => [p.id, p.start_date]));
+          history = ((rows ?? []) as { plan_id: string; topic_id: string | null; task_type: TaskType; done: boolean }[]).map((r) => ({
+            plan_start: startOf.get(r.plan_id) ?? "",
+            topic_id: r.topic_id,
+            task_type: r.task_type,
+            done: r.done,
+          }));
+        }
+        const field = (prof.data as { field: string | null } | null)?.field ?? null;
+        const grade = (prof.data as { grade: string | null } | null)?.grade ?? null;
+        setData({ plans, analyses, progress, schedule, field, grade, history });
+        setSections(sectionsForField(field));
+        setTytShare(defaultShare(field, grade));
+        const pre = initialAnalysisId ? analyses.find((a) => a.id === initialAnalysisId) : undefined;
+        const lastT = analyses.find((a) => a.exam_type === "TYT");
+        const lastA = analyses.find((a) => a.exam_type === "AYT");
+        setTytId((pre?.exam_type === "TYT" ? pre : lastT)?.id ?? "");
+        setAytId((pre?.exam_type === "AYT" ? pre : lastA)?.id ?? "");
+        // Başlangıç: en son programın ertesi haftası, yoksa bugün
+        const last = [...plans].sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
+        if (last && addDays(last.start_date, 7) >= todayISO()) setStart(addDays(last.start_date, 7));
+      } catch (e) {
+        setError(errorText(e));
+      }
+    })();
+  }, [studentId, plansProp, initialAnalysisId]);
 
-  const analysis = analyses?.find((a) => a.id === analysisId) ?? null;
-  const result = useMemo(
-    () => buildPlan({ levels, levelQuestions, analysis, progress, daily, maxTopics, excluded }),
-    [levels, levelQuestions, analysis, progress, daily, maxTopics, excluded],
-  );
+  const result = useMemo(() => {
+    if (!data) return null;
+    return buildTimedPlan({
+      start,
+      schedule: data.schedule,
+      sections,
+      tyt: data.analyses.find((a) => a.id === tytId) ?? null,
+      ayt: data.analyses.find((a) => a.id === aytId) ?? null,
+      progress: data.progress,
+      history: data.history,
+      tytShare,
+      routines,
+      carryOver,
+      excluded,
+      pattern: pattern.split("-").map(Number) as [number, number],
+    });
+  }, [data, start, sections, tytId, aytId, tytShare, routines, carryOver, excluded, pattern]);
+
+  const scheduleEmpty = data ? data.schedule.slots.every((r) => rangeMinutes(r) === 0) : false;
+  const hasAyt = sections.some((s) => ALL_SECTIONS.find((x) => x.id === s)?.exam === "AYT");
 
   async function create() {
+    if (!data || !result) return;
     setError(null);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return setError("Geçerli bir başlangıç tarihi seçin.");
-    if (!result.tasks.length) return setError("Oluşturulacak görev yok. Müsait gün seçin veya deneme analizi girin.");
+    if (!result.tasks.length) return setError("Oluşturulacak blok yok. Çalışma saatlerini ve ders seçimini kontrol edin.");
     setBusy(true);
     try {
-      let plan = plans.find((p) => p.start_date === start) ?? null;
+      const minutes = result.dayMinutes;
+      const levels: DayLevel[] = minutes.map((m) => (m === 0 ? "kapali" : m <= 90 ? "hafif" : m <= 180 ? "normal" : "yogun"));
+      const tyt = data.analyses.find((a) => a.id === tytId) ?? null;
+      const ayt = data.analyses.find((a) => a.id === aytId) ?? null;
+      const title = [tyt?.title, ayt?.title].filter(Boolean).join(" + ");
+      let plan = data.plans.find((p) => p.start_date === start) ?? null;
       if (plan) {
-        const { count } = await sb().from("plan_tasks").select("id", { count: "exact", head: true }).eq("plan_id", plan.id);
-        if (count && !confirmAction(`${formatTR(start)} haftasında zaten ${count} görev var. Yeni görevler bunlara eklensin mi?`)) {
+        const { count } = await sb().from("plan_tasks").select("id", { count: "exact", head: true }).eq("plan_id", plan.id).eq("done", false);
+        if (count && !confirmAction(`${formatTR(start)} haftasında tamamlanmamış ${count} görev var. Bunlar silinip yerine yeni program yazılsın mı? (Tamamlanan görevler kalır.)`)) {
           setBusy(false);
           return;
         }
-        await sb().from("weekly_plans").update({ day_levels: levels, analysis_id: analysis?.id ?? null }).eq("id", plan.id);
+        if (count) {
+          const { error } = await sb().from("plan_tasks").delete().eq("plan_id", plan.id).eq("done", false);
+          if (error) throw error;
+        }
+        await sb().from("weekly_plans").update({ day_levels: levels, analysis_id: (tyt ?? ayt)?.id ?? null }).eq("id", plan.id);
       } else {
-        const { data, error } = await sb()
+        const { data: row, error } = await sb()
           .from("weekly_plans")
-          .insert({ student_id: studentId, start_date: start, day_levels: levels, analysis_id: analysis?.id ?? null, title: analysis ? `${analysis.title} sonrası` : null })
+          .insert({ student_id: studentId, start_date: start, day_levels: levels, analysis_id: (tyt ?? ayt)?.id ?? null, title: title ? `${title} sonrası` : null })
           .select("*")
           .single();
         if (error) throw error;
-        plan = data as WeeklyPlan;
+        plan = row as WeeklyPlan;
       }
       const rows = result.tasks.map((t: DraftTask) => ({ ...t, plan_id: (plan as WeeklyPlan).id, student_id: studentId, done: false }));
       const { error: e2 } = await sb().from("plan_tasks").insert(rows);
       if (e2) throw e2;
-      toast.show(`${rows.length} görev oluşturuldu`);
+      toast.show(`${rows.length} blokluk program oluşturuldu`);
       onCreated((plan as WeeklyPlan).id);
     } catch (e) {
       setError(errorText(e));
@@ -1069,6 +1220,7 @@ export function GeneratorModal({
     }
   }
 
+  const toggleSection = (id: string) => setSections((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
   const dates = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
   return (
@@ -1081,138 +1233,204 @@ export function GeneratorModal({
           <Button variant="ghost" onClick={onClose}>
             Vazgeç
           </Button>
-          <Button icon="check" onClick={create} loading={busy} disabled={!analyses}>
-            Programı oluştur ({result.tasks.length} görev)
+          <Button icon="check" onClick={create} loading={busy} disabled={!result || scheduleEmpty || !result.tasks.length}>
+            Programı oluştur{result ? ` (${result.tasks.length} blok)` : ""}
           </Button>
         </>
       }
     >
-      {!analyses ? (
-        <PageLoader />
+      {!data || !result ? (
+        error ? <ErrorBox>{error}</ErrorBox> : <PageLoader />
+      ) : scheduleEmpty ? (
+        <div className="space-y-3">
+          <EmptyState icon="clock" title="Önce çalışma saatlerini gir">
+            Program, öğrencinin çalışabileceği saatlere göre oluşturulur. Saatler bölümünde her gün için saat aralıklarını girip kaydet.
+          </EmptyState>
+          <div className="flex justify-center">
+            <Button
+              icon="clock"
+              onClick={() => {
+                onClose();
+                go({ v: "ogrenci", id: studentId, t: "saatler" });
+              }}
+            >
+              Çalışma saatlerine git
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Başlangıç tarihi" htmlFor="g-start" hint={`${dayName(start)} → ${dayName(addDays(start, 6))}`}>
               <input id="g-start" type="date" className="field" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
             </Field>
-            <Field label="Deneme analizi" htmlFor="g-analysis" hint={analyses.length ? "Yanlış/boş sayısına göre konu ve soru dağılımı" : "Henüz analiz yok — Denemeler sekmesinden ekleyin"}>
-              <select
-                id="g-analysis"
-                className="field"
-                value={analysisId}
-                onChange={(e) => {
-                  setAnalysisId(e.target.value);
-                  setExcluded([]);
-                }}
-              >
-                <option value="">Analiz kullanma (çalışılan konular)</option>
-                {analyses.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {formatTR(a.exam_date)} · {a.title}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {(["TYT", "AYT"] as const).map((ex) => {
+              const list = data.analyses.filter((a) => a.exam_type === ex);
+              const val = ex === "TYT" ? tytId : aytId;
+              return (
+                <Field key={ex} label={`${ex} denemesi`} htmlFor={`g-${ex}`} hint={list.length ? "Yanlış/boş konular öne alınır" : "Bu türde deneme yok"}>
+                  <select
+                    id={`g-${ex}`}
+                    className="field"
+                    value={val}
+                    onChange={(e) => {
+                      (ex === "TYT" ? setTytId : setAytId)(e.target.value);
+                      setExcluded([]);
+                    }}
+                  >
+                    <option value="">Kullanma</option>
+                    {list.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {formatShort(a.exam_date)} · {a.title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              );
+            })}
           </div>
 
           <div>
-            <p className="mb-1.5 text-sm font-medium">Müsait günler</p>
-            <p className="mb-2 text-xs text-muted">Okulda boş saati çok olan günleri “Yoğun”, dinlenme gününü “Kapalı” yap.</p>
-            <div className="space-y-1.5">
-              {dates.map((d, i) => (
-                <div key={d} className="flex items-center gap-2">
-                  <span className="w-24 shrink-0 text-sm">
-                    {dayShort(d)} <span className="text-xs text-faint">{formatShort(d)}</span>
-                  </span>
-                  <div className="flex-1">
-                    <Segmented
-                      size="sm"
-                      ariaLabel={`${dayName(d)} müsaitlik`}
-                      value={levels[i]}
-                      onChange={(v) => setLevels((ls) => ls.map((x, j) => (j === i ? v : x)))}
-                      options={DAY_LEVELS.map((l) => ({ value: l.value, label: l.label }))}
-                    />
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">
+                Dersler <span className="font-normal text-muted">· Alan: {data.field ?? "belirtilmemiş"}</span>
+              </p>
+              <button className="text-xs text-primary" onClick={() => setSections(sectionsForField(data.field))}>
+                Alana göre varsayılan
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["sayisal", "sozel"] as const).map((cat) => (
+                <div key={cat} className={cx("rounded-xl border p-2.5", cat === "sayisal" ? "border-say/30 bg-say-soft/40" : "border-soz/30 bg-soz-soft/40")}>
+                  <p className={cx("mb-1.5 text-xs font-bold uppercase tracking-wide", cat === "sayisal" ? "text-say" : "text-soz")}>{cat === "sayisal" ? "Sayısal" : "Sözel"}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ALL_SECTIONS.filter((s) => categoryOfSection(s.id) === cat).map((s) => {
+                      const on = sections.includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleSection(s.id)}
+                          className={cx(
+                            "rounded-lg border px-2 py-1 text-xs font-medium transition",
+                            on ? (cat === "sayisal" ? "border-say bg-say text-white" : "border-soz bg-soz text-white") : "border-line bg-surface text-muted hover:bg-surface-2",
+                          )}
+                        >
+                          {s.title.replace(" (TYT konuları hariç)", "").replace("Din Kültürü ve Ahlak Bilgisi", "TYT Din Kültürü")}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span className="w-12 text-right text-xs tabular text-muted">{result.dayTargets[i] || "—"}</span>
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
-              Günlük soru hedefi:
-              {DAY_LEVELS.filter((l) => l.value !== "kapali").map((l) => (
-                <label key={l.value} className="flex items-center gap-1">
-                  {l.label}
-                  <input
-                    inputMode="numeric"
-                    className="field h-8 w-16 px-2 py-1 text-center text-sm"
-                    value={levelQuestions[l.value]}
-                    onChange={(e) => setLevelQuestions((q) => ({ ...q, [l.value]: Math.min(600, Number(e.target.value.replace(/[^\d]/g, "")) || 0) }))}
-                  />
-                </label>
-              ))}
-            </div>
           </div>
 
-          <div>
-            <p className="mb-2 text-sm font-medium">Her gün sabit</p>
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <label className="flex items-center gap-1.5">
-                Paragraf
-                <input
-                  inputMode="numeric"
-                  className="field h-8 w-16 px-2 py-1 text-center"
-                  value={daily.paragraf}
-                  onChange={(e) => setDaily((d) => ({ ...d, paragraf: Number(e.target.value.replace(/[^\d]/g, "")) || 0 }))}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1.5 text-sm font-medium">Blok sırası</p>
+                <Segmented
+                  size="sm"
+                  ariaLabel="Blok sırası"
+                  value={pattern}
+                  onChange={setPattern}
+                  options={[
+                    { value: "1-1", label: "1 sayısal · 1 sözel" },
+                    { value: "2-1", label: "2 say · 1 söz" },
+                    { value: "1-2", label: "1 say · 2 söz" },
+                  ]}
                 />
-              </label>
-              <label className="flex items-center gap-1.5">
-                Problem
-                <input
-                  inputMode="numeric"
-                  className="field h-8 w-16 px-2 py-1 text-center"
-                  value={daily.problem}
-                  onChange={(e) => setDaily((d) => ({ ...d, problem: Number(e.target.value.replace(/[^\d]/g, "")) || 0 }))}
+              </div>
+              <div>
+              <p className="mb-1.5 text-sm font-medium">TYT / AYT dağılımı</p>
+              {hasAyt ? (
+                <Segmented
+                  size="sm"
+                  ariaLabel="TYT oranı"
+                  value={tytShare}
+                  onChange={setTytShare}
+                  options={[100, 70, 50, 30].map((n) => ({ value: n, label: n === 100 ? "Yalnız TYT" : `TYT %${n}` }))}
                 />
+              ) : (
+                <p className="text-sm text-muted">Seçili derslerde AYT yok, bloklar TYT’den.</p>
+              )}
+              </div>
+            </div>
+            <div className="space-y-1.5 text-sm">
+              <p className="font-medium">Seçenekler</p>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4" checked={routines.paragraf} onChange={(e) => setRoutines((r) => ({ ...r, paragraf: e.target.checked }))} />
+                Her gün 20 dk paragraf
               </label>
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" className="h-4 w-4" checked={daily.tekrar} onChange={(e) => setDaily((d) => ({ ...d, tekrar: e.target.checked }))} />
-                Günlük tekrar
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4" checked={routines.problem} onChange={(e) => setRoutines((r) => ({ ...r, problem: e.target.checked }))} />
+                Her gün 20 dk problem
               </label>
-              <label className="flex items-center gap-1.5">
-                En fazla
-                <input
-                  inputMode="numeric"
-                  className="field h-8 w-14 px-2 py-1 text-center"
-                  value={maxTopics}
-                  onChange={(e) => setMaxTopics(Math.min(20, Math.max(1, Number(e.target.value.replace(/[^\d]/g, "")) || 1)))}
-                />
-                öncelikli konu
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="h-4 w-4" checked={carryOver} onChange={(e) => setCarryOver(e.target.checked)} />
+                Geçen haftadan kalanları öne al
               </label>
             </div>
           </div>
 
           <div>
-            <div className="mb-2 flex items-baseline justify-between">
-              <p className="text-sm font-medium">Öncelikli konular</p>
-              <p className="text-xs text-muted tabular">Haftalık toplam: {fmtNum(result.total, 0)} soru</p>
-            </div>
-            {result.priorities.length === 0 ? (
-              <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">
-                {analysis ? "Bu analizde yanlış/boş girilmiş konu yok." : "“Çalışılıyor” durumunda konu yok. Deneme analizi girersen konular otomatik seçilir."}
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">Önizleme</p>
+              <p className="text-xs text-muted tabular">
+                {result.stats.sayisal} sayısal · {result.stats.sozel} sözel · TYT {result.stats.tyt} / AYT {result.stats.ayt} blok · ~{fmtNum(result.stats.questions, 0)} soru
               </p>
+            </div>
+            <div className="max-h-80 space-y-2 overflow-y-auto rounded-xl border border-line p-2">
+              {dates.map((d, i) => {
+                const list = result.blocks.filter((b) => b.day_index === i);
+                return (
+                  <div key={d}>
+                    <p className="px-1 text-xs font-semibold text-muted">
+                      {dayName(d)} {formatShort(d)}
+                      <span className="font-normal text-faint"> · {result.dayMinutes[i] ? `${minutesToText(result.dayMinutes[i])} ders` : "çalışma yok"}</span>
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {list.map((b) => (
+                        <li
+                          key={b.sort}
+                          className={cx(
+                            "flex items-center gap-2 rounded-md border-l-[3px] bg-surface-2/60 px-2 py-1 text-xs",
+                            b.category === "sayisal" ? "border-say" : "border-soz",
+                          )}
+                        >
+                          <span className="w-10 shrink-0 font-semibold tabular">{b.start_time}</span>
+                          <span className="w-24 shrink-0 truncate text-[11px] text-muted">{b.subject}</span>
+                          <span className="min-w-0 flex-1 truncate">{b.topic_id ? (topicName.get(b.topic_id) ?? b.topic_id) : b.content}</span>
+                          <span className={cx("rounded px-1 text-[9px] font-bold uppercase", TYPE_TONE[b.task_type])}>{typeShort(b.task_type)}</span>
+                          <span className="w-8 shrink-0 text-right tabular text-muted">{b.target_questions ?? ""}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Bu hafta çalışılacak konular</p>
+            {result.candidates.length === 0 ? (
+              <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">Konu bulunamadı. Ders seçimini veya deneme analizini kontrol et.</p>
             ) : (
               <ul className="divide-y divide-line rounded-xl border border-line">
-                {result.priorities.map((p) => (
-                  <li key={p.topic_id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                {result.candidates.map((c) => (
+                  <li key={c.topic_id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                    <span className={cx("h-2 w-2 shrink-0 rounded-full", c.category === "sayisal" ? "bg-say" : "bg-soz")} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{p.name}</p>
-                      <p className="text-xs text-muted">
-                        {p.subject}
-                        {p.wrong || p.empty ? ` · ${p.wrong} yanlış, ${p.empty} boş` : ""} · kısa tekrar + soru
+                      <p className="truncate font-medium">{c.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        {c.subject} · {c.reasons.join(" · ")}
                       </p>
                     </div>
-                    <Badge tone="primary">{p.questions} soru</Badge>
-                    <IconButton icon="x" label="Konuyu çıkar" className="h-8 w-8" onClick={() => setExcluded((x) => [...x, p.topic_id])} />
+                    <Badge>{c.uses} blok</Badge>
+                    <IconButton icon="x" label="Konuyu çıkar" className="h-8 w-8" onClick={() => setExcluded((x) => [...x, c.topic_id])} />
                   </li>
                 ))}
               </ul>
@@ -1223,7 +1441,7 @@ export function GeneratorModal({
               </button>
             )}
           </div>
-          <p className="text-xs text-muted">Oluşturduktan sonra tablo üzerinde her görevi değiştirebilir, silebilir veya yeni görev ekleyebilirsin.</p>
+          <p className="text-xs text-muted">Oluşturduktan sonra tabloda her bloğu değiştirebilir, silebilir veya yeni görev ekleyebilirsin.</p>
           {error && <ErrorBox>{error}</ErrorBox>}
         </div>
       )}
@@ -1292,6 +1510,8 @@ function NewPlanModal({
         task_type: t.task_type,
         target_questions: t.target_questions,
         sort: t.sort,
+        start_time: t.start_time,
+        duration_min: t.duration_min,
         done: false,
       }));
       const { error: e3 } = await sb().from("plan_tasks").insert(rows);

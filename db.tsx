@@ -3,7 +3,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
-import type { DailyLog, ExamAnalysis, PlanDay, PlanTask, Profile, TopicProgress, WeeklyPlan } from "./lib";
+import { emptySchedule, type DailyLog, type ExamAnalysis, type PlanDay, type PlanTask, type Profile, type StudySchedule, type TopicProgress, type WeeklyPlan } from "./lib";
 
 /* ------------------------------------------------------------------ */
 /* Supabase istemcisi                                                  */
@@ -46,6 +46,9 @@ export function errorText(err: unknown): string {
   if (/row-level security|permission denied/i.test(msg)) return "Bu işlem için yetkiniz yok.";
   if (/duplicate key|unique/i.test(msg)) return "Bu kayıt zaten mevcut.";
   if (/JWT expired|jwt/i.test(msg)) return "Oturum süresi doldu, lütfen tekrar giriş yapın.";
+  if (/Bucket not found/i.test(msg)) return "Karne deposu yok: Supabase → SQL Editor'de guncelleme-2.sql dosyasını çalıştırın.";
+  if (/schema cache|does not exist|Could not find the (table|column)/i.test(msg))
+    return "Veritabanı güncel değil: Supabase → SQL Editor'de guncelleme-2.sql dosyasını çalıştırın. (" + msg.slice(0, 120) + ")";
   return msg;
 }
 
@@ -83,6 +86,19 @@ export async function fetchTopicProgress(studentId: string): Promise<TopicProgre
   const { data, error } = await sb().from("topic_progress").select("*").eq("student_id", studentId);
   if (error) throw error;
   return (data ?? []) as TopicProgress[];
+}
+
+/** Öğrencinin çalışma saatleri; kayıt yoksa boş şablon döner */
+export async function fetchSchedule(studentId: string): Promise<StudySchedule> {
+  const { data, error } = await sb().from("study_schedules").select("*").eq("student_id", studentId).maybeSingle();
+  if (error) throw error;
+  const base = emptySchedule(studentId);
+  if (!data) return base;
+  const raw = data as StudySchedule;
+  const slots = Array.from({ length: 7 }, (_, i) =>
+    Array.isArray(raw.slots?.[i]) ? raw.slots[i].filter((r) => r && typeof r.s === "string" && typeof r.e === "string") : [],
+  );
+  return { ...base, ...raw, slots };
 }
 
 export async function fetchAnalyses(studentId: string): Promise<ExamAnalysis[]> {

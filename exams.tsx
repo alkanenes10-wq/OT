@@ -32,6 +32,23 @@ export async function openKarne(path: string) {
   window.open(data.signedUrl, "_blank", "noopener");
 }
 
+/** Bir işlem belirtilen sürede bitmezse hata verir (sonsuz bekleme olmasın) */
+function withTimeout<T>(p: PromiseLike<T>, ms: number, msg: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(msg)), ms);
+    Promise.resolve(p).then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
 export function ExamAnalyses({ studentId }: { studentId: string }) {
   const toast = useToast();
   const { go } = useRoute();
@@ -42,6 +59,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const [genFor, setGenFor] = useState<string | null>(null);
   const [report, setReport] = useState<KarneReport | null>(null);
+  const [kind, setKind] = useState<"ALL" | "TYT" | "AYT">("ALL");
 
   async function uploadAndAnalyze(file: File) {
     setError(null);
@@ -51,14 +69,24 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
     setStage("upload");
     const safe = file.name.normalize("NFKD").replace(/[^\w.-]+/g, "_").slice(-60);
     const path = `${studentId}/${Date.now()}-${safe}`;
-    const up = await sb().storage.from("karneler").upload(path, file, { contentType: file.type || "application/pdf" });
-    if (up.error) {
+    try {
+      const up = await withTimeout(
+        sb().storage.from("karneler").upload(path, file, { contentType: file.type || "application/pdf" }),
+        60_000,
+        "Dosya 60 saniyede yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.",
+      );
+      if (up.error) throw up.error;
+    } catch (e) {
       setStage("idle");
-      return setError(errorText(up.error));
+      return setError(errorText(e));
     }
     setStage("analyze");
     try {
-      const r = await analyzeKarne(await accessToken(), studentId, path);
+      const r = await withTimeout(
+        analyzeKarne(await accessToken(), studentId, path),
+        90_000,
+        "Karne 90 saniyede okunamadı. Sayfayı yenileyip tekrar deneyin veya sonuçları elle girin.",
+      );
       if (!r.ok) throw new Error(r.error);
       const k = r.result;
       const { data, error } = await sb()
@@ -89,9 +117,12 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
   }
 
   const load = () =>
-    fetchAnalyses(studentId)
+    withTimeout(fetchAnalyses(studentId), 30_000, "Denemeler yüklenemedi (bağlantı zaman aşımı).")
       .then(setList)
-      .catch((e) => setError(errorText(e)));
+      .catch((e) => {
+        setList([]); // hata varken sonsuz "Yükleniyor…" gösterme
+        setError("Denemeler yüklenemedi: " + errorText(e));
+      });
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,8 +231,25 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
           </EmptyState>
         </Card>
       ) : (
+        <>
+        <div className="flex items-center gap-2">
+          <div className="w-64">
+            <Segmented
+              size="sm"
+              ariaLabel="Deneme türü"
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: "ALL", label: "Tümü" },
+                { value: "TYT", label: `TYT (${list.filter((a) => a.exam_type === "TYT").length})` },
+                { value: "AYT", label: `AYT (${list.filter((a) => a.exam_type === "AYT").length})` },
+              ]}
+            />
+          </div>
+        </div>
         <ul className="space-y-3">
-          {list.map((a, i) => {
+          {list.filter((a) => kind === "ALL" || a.exam_type === kind).map((a) => {
+            const isLast = list.find((x) => x.exam_type === a.exam_type)?.id === a.id;
             const n = totalNet(a);
             const wrong = a.results.reduce((s, r) => s + (r.wrong ?? 0), 0);
             const emptyN = a.results.reduce((s, r) => s + (r.empty ?? 0), 0);
@@ -210,7 +258,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold">
-                      {a.title} <Badge tone="primary">{a.exam_type === "BRANS" ? "Branş" : a.exam_type}</Badge> {i === 0 && <Badge tone="success">Son</Badge>}
+                      {a.title} <Badge tone="primary">{a.exam_type === "BRANS" ? "Branş" : a.exam_type}</Badge> {isLast && <Badge tone="success">Son {a.exam_type === "BRANS" ? "branş" : a.exam_type}</Badge>}
                     </p>
                     <p className="text-sm text-muted">{formatLong(a.exam_date)}</p>
                   </div>
@@ -256,7 +304,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
                   </div>
                 )}
                 <div className="mt-3">
-                  <Button variant={i === 0 ? "primary" : "soft"} size="sm" icon="calendar" onClick={() => setGenFor(a.id)}>
+                  <Button variant={isLast ? "primary" : "soft"} size="sm" icon="calendar" onClick={() => setGenFor(a.id)}>
                     Bu analizle program oluştur
                   </Button>
                 </div>
@@ -264,6 +312,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
             );
           })}
         </ul>
+        </>
       )}
       {genFor && (
         <GeneratorModal

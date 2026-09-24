@@ -7,7 +7,8 @@ import { DailyLogSection } from "./daily";
 import { A, errorText, fetchLogs, fetchPlans, sb, useAuth, useRoute } from "./db";
 import { StudentInsights } from "./insights";
 import { addDays, type DailyLog, dayShort, diffDays, fmtNum, formatLong, pct, pickCurrentPlan, type PlanTask, todayISO, type WeeklyPlan, yesNo } from "./lib";
-import { patchTask, subjectOrder, TaskRow, WeeklyPlanView } from "./plan";
+import { byOrder, patchTask, TaskRow, WeeklyPlanView } from "./plan";
+import { ScheduleSection } from "./schedule";
 import { InstallHint, PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, ProgressBar, useToast } from "./ui";
@@ -75,7 +76,7 @@ function Today() {
   const dayIndex = plan ? diffDays(plan.start_date, today) : -1;
   const todayTasks = tasks
     .filter((t) => t.day_index === dayIndex && (t.topic_id || t.content.trim() || t.target_questions))
-    .sort((a, b) => subjectOrder(a.subject) - subjectOrder(b.subject) || a.sort - b.sort);
+    .sort(byOrder);
   const doneToday = todayTasks.filter((t) => t.done).length;
   const weekTasks = tasks.filter((t) => t.topic_id || t.content.trim() || t.target_questions);
   const todayTarget = todayTasks.reduce((a, t) => a + (t.target_questions ?? 0), 0);
@@ -203,7 +204,16 @@ function Program() {
   return (
     <>
       <PageHeader title="Haftalık program" />
-      <WeeklyPlanView studentId={profile.id} />
+      <WeeklyPlanView studentId={profile.id} field={profile.field} />
+      <details className="group mt-6 max-w-3xl">
+        <summary className="cursor-pointer list-none text-sm font-medium text-primary">
+          <span className="group-open:hidden">▸ Çalışma saatlerimi göster</span>
+          <span className="hidden group-open:inline">▾ Çalışma saatlerimi gizle</span>
+        </summary>
+        <div className="mt-3">
+          <ScheduleSection studentId={profile.id} editable={false} />
+        </div>
+      </details>
     </>
   );
 }
