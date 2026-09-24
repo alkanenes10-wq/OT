@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Renk ve tema değişkenleri (açık / koyu mod)
+   --------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --bg: #f3f5f9;
+  --surface: #ffffff;
+  --surface-2: #f6f7fa;
+  --fg: #111827;
+  --muted: #4b5563;
+  --faint: #6b7280;
+  --border: #e2e6ee;
+  --primary: #1f5fd6;
+  --primary-hover: #1a50b5;
+  --primary-fg: #ffffff;
+  --primary-soft: #e8effc;
+  --primary-ink: #1846a3;
+  --success: #15803d;
+  --success-soft: #e6f4ea;
+  --warning: #9a5a06;
+  --warning-soft: #fdf1dc;
+  --danger: #c42b2b;
+  --danger-soft: #fce8e8;
+  --ring: rgba(31, 95, 214, 0.35);
+
+  /* grafikler */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --grid: #e8e7e1;
+  --axis: #c3c2b7;
+  --chart-ink: #52514e;
+  --chart-muted: #898781;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0d1015;
+    --surface: #161a21;
+    --surface-2: #1c212a;
+    --fg: #f3f4f6;
+    --muted: #b8bec9;
+    --faint: #8d95a4;
+    --border: #2a303b;
+    --primary: #3a78e6;
+    --primary-hover: #5189ec;
+    --primary-fg: #ffffff;
+    --primary-soft: #1a2a45;
+    --primary-ink: #a8c6ff;
+    --success: #43c46f;
+    --success-soft: #14291c;
+    --warning: #e8a841;
+    --warning-soft: #2f2511;
+    --danger: #f07171;
+    --danger-soft: #351a1a;
+    --ring: rgba(90, 145, 240, 0.45);
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --grid: #2c2f35;
+    --axis: #3d414a;
+    --chart-ink: #c3c2b7;
+    --chart-muted: #898781;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    min-height: 100dvh;
+  }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* iOS'ta otomatik yakınlaştırmayı engeller */
+  }
+  input[type="number"]::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-fg placeholder:text-faint outline-none transition;
+  }
+  .field:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-surface;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
