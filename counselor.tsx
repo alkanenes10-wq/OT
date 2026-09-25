@@ -12,6 +12,7 @@ import { WeeklyPlanView } from "./plan";
 import { ExamAnalyses } from "./exams";
 import { ScheduleSection } from "./schedule";
 import { CounselorTeam, TransferStudent } from "./team";
+import { SupportInbox, SupportPanel } from "./support";
 import { PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast } from "./ui";
@@ -473,6 +474,7 @@ function StudentList() {
             <Summary label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
             <Summary label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
           </div>
+          <SupportInbox names={new Map((rows ?? []).map((r) => [r.student.id, r.student.full_name]))} />
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <div className="relative min-w-0 flex-1">
               <Icon name="search" size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
@@ -752,7 +754,12 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
       <Tabs tabs={TABS} value={tab} onChange={changeTab} />
 
       <div className="pt-1">
-        {tab === "ozet" && <StudentInsights studentId={student.id} showSignals />}
+        {tab === "ozet" && (
+          <div className="space-y-4">
+            <SupportPanel studentId={student.id} />
+            <StudentInsights studentId={student.id} showSignals />
+          </div>
+        )}
         {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} field={student.field} />}
         {tab === "saatler" && (
           <div className="max-w-3xl">

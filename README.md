@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql`, `guncelleme-3.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql`, `guncelleme-3.sql`, `guncelleme-4.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -55,6 +55,15 @@ Bu sürümü mevcut kuruluma yüklerken **bir kez** şunu yap: Supabase → SQL 
 - **Denemeler sekmesi:** kazanım karnesini (PDF) yükle; netler ve konu konu yanlış/boş sayıları otomatik okunur (gerekirse elle düzeltilir).
 - **Otomatik program oluştur:** son denemedeki yanlış/boşlara ve müsait günlere göre her öncelikli konu için kısa konu tekrarı + soru çözümü dağıtır, günlük/haftalık hedef soruyu hesaplar. Sonra tabloda istediğin gibi düzenlersin. Soru hedefleri ve konu başına üst sınır `planner.ts` içinde.
 - **Otomatik konu takibi:** görev tamamlanınca (ya da öğrenci hedef soru sayısına ulaşınca) konu takibi güncellenir: Konu → Bitti, Soru → Çalışılıyor, Tekrar → Tekrar edildi. Hiçbir zaman geri almaz.
+
+## Güncelleme 5 — destek / risk yönlendirmesi
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-4.sql` → **Run**. Yeni dosya: `support.tsx`.
+
+- **Otomatik uyarı:** Öğrenci günlük takibi kaydettikçe son 3 kayıt (son 7 gün) incelenir: 3 kayıtta da kaygı 4-5, ya da 3 kayıtta da motivasyon ve enerji 1-2, ya da en az 2 gün yüksek kaygı + 5 saatten az uyku → uyarı. Eşikler `guncelleme-4.sql` içindeki `check_support_risk` fonksiyonunda.
+- **Öğrenci:** Bugün ekranında her zaman "Zor bir gün mü?" bağlantısı; otomatik uyarı oluşunca nazik bir destek kartı ("Konuşmak istiyorum" / "Şimdilik iyiyim"). Destek ekranında her zaman acil durumda 112 bilgisi ve arama butonu. Öğrenci uyarı nedenlerini ve danışman notlarını göremez.
+- **Danışman:** Öğrenciler sayfasının üstünde "Destek gerekenler" listesi (önce öğrencinin kendi istekleri). Öğrenci → Özet → "Destek ve takip": Gördüm / Görüştüm / Veliyle paylaştım / Okul rehberliğine bildirdim / Uzmana yönlendirdim / Not / Kapattım — her adım tarihiyle kaydedilir.
+- Bu bir kriz müdahale sistemi değildir; uyarılar danışman uygulamayı açtığında görülür.
 
 ## Danışman ekleme (ekip)
 

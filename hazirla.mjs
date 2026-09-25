@@ -27,6 +27,7 @@ const APP_FILES = [
   "exams.tsx",
   "schedule.tsx",
   "team.tsx",
+  "support.tsx",
   "karne.ts",
 ];
 

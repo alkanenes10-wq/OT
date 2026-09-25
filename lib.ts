@@ -60,6 +60,41 @@ export type PlanTask = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Destek / risk yönlendirmesi                                         */
+/* ------------------------------------------------------------------ */
+export type SupportStatus = "open" | "seen" | "contacted" | "closed";
+export type SupportAlert = {
+  id: string;
+  student_id: string;
+  source: "auto" | "student";
+  reasons: string[];
+  student_note: string | null;
+  status: SupportStatus;
+  student_dismissed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type SupportActionKind = "seen" | "contacted" | "parent" | "school" | "referred" | "note" | "closed";
+export type SupportAction = {
+  id: string;
+  alert_id: string;
+  student_id: string;
+  action: SupportActionKind;
+  note: string;
+  created_by: string | null;
+  created_at: string;
+};
+export const SUPPORT_ACTIONS: { value: SupportActionKind; label: string; status: SupportStatus | null }[] = [
+  { value: "seen", label: "Gördüm", status: "seen" },
+  { value: "contacted", label: "Öğrenciyle görüştüm", status: "contacted" },
+  { value: "parent", label: "Veliyle paylaştım", status: "contacted" },
+  { value: "school", label: "Okul rehberliğine bildirdim", status: "contacted" },
+  { value: "referred", label: "Uzmana yönlendirdim", status: "contacted" },
+  { value: "note", label: "Not", status: null },
+  { value: "closed", label: "Kapattım", status: "closed" },
+];
+
+/* ------------------------------------------------------------------ */
 /* Çalışma saatleri (danışman girer, öğrenci görür)                    */
 /* ------------------------------------------------------------------ */
 export type TimeRange = { s: string; e: string };

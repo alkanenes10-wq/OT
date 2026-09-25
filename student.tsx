@@ -9,6 +9,7 @@ import { StudentInsights } from "./insights";
 import { addDays, type DailyLog, dayShort, diffDays, fmtNum, formatLong, pct, pickCurrentPlan, type PlanTask, todayISO, type WeeklyPlan, yesNo } from "./lib";
 import { byOrder, patchTask, TaskRow, WeeklyPlanView } from "./plan";
 import { ScheduleSection } from "./schedule";
+import { StudentSupport } from "./support";
 import { InstallHint, PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, ProgressBar, useToast } from "./ui";
@@ -95,6 +96,7 @@ function Today() {
         <p className="text-sm text-muted">{formatLong(today)}</p>
       </div>
       <InstallHint />
+      <StudentSupport variant="card" />
       {error && <ErrorBox>{error}</ErrorBox>}
 
       {yesterdayLog?.tomorrow_change && (
@@ -185,6 +187,8 @@ function Today() {
           <p className="mt-2 text-xs text-muted">%{pct(weekDone, weekTasks.length) ?? 0} tamamlandı</p>
         </Card>
       )}
+
+      <StudentSupport variant="link" />
     </div>
   );
 }
