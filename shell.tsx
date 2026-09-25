@@ -360,7 +360,7 @@ export function LoginScreen() {
         <h1 className="text-xl font-semibold">Giriş yap</h1>
         <p className="mt-1 text-sm text-muted">{APP_NAME} hesabınla devam et.</p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
-          <Field label="Kullanıcı adı veya e-posta" htmlFor="login">
+          <Field label="Kullanıcı adı veya e-posta" htmlFor="login" hint="Öğrenciler kullanıcı adıyla, danışmanlar e-posta adresiyle girer.">
             <input
               id="login"
               className="field"

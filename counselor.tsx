@@ -11,6 +11,7 @@ import { isRealTask, addDays, avg, computeSignals, type CounselorNote, type Dail
 import { WeeklyPlanView } from "./plan";
 import { ExamAnalyses } from "./exams";
 import { ScheduleSection } from "./schedule";
+import { CounselorTeam, TransferStudent } from "./team";
 import { PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast } from "./ui";
@@ -281,6 +282,8 @@ export function StudentAccount({ student, onChanged }: { student: Profile; onCha
           </div>
         </div>
       </Card>
+
+      <TransferStudent studentId={student.id} studentName={student.full_name} />
 
       <Card title="Hesap durumu">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -803,7 +806,7 @@ function CounselorSettings() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4">
+    <div className="mx-auto max-w-xl space-y-4">
       <PageHeader title="Ayarlar" />
       <Card title="Profil" subtitle={session?.user.email}>
         <div className="space-y-3">
@@ -817,6 +820,7 @@ function CounselorSettings() {
           </div>
         </div>
       </Card>
+      <CounselorTeam />
       <ChangeOwnPassword />
       <Card title="Veri güvenliği (KVKK)">
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted">

@@ -56,6 +56,14 @@ Bu sürümü mevcut kuruluma yüklerken **bir kez** şunu yap: Supabase → SQL 
 - **Otomatik program oluştur:** son denemedeki yanlış/boşlara ve müsait günlere göre her öncelikli konu için kısa konu tekrarı + soru çözümü dağıtır, günlük/haftalık hedef soruyu hesaplar. Sonra tabloda istediğin gibi düzenlersin. Soru hedefleri ve konu başına üst sınır `planner.ts` içinde.
 - **Otomatik konu takibi:** görev tamamlanınca (ya da öğrenci hedef soru sayısına ulaşınca) konu takibi güncellenir: Konu → Bitti, Soru → Çalışılıyor, Tekrar → Tekrar edildi. Hiçbir zaman geri almaz.
 
+## Danışman ekleme (ekip)
+
+İlk kurulan danışman hesabı **yöneticidir**. Yönetici: **Ayarlar → Danışmanlar → Danışman ekle** → ad soyad, e-posta, geçici şifre → **Mesajı kopyala** ile yeni danışmana gönder. SQL gerekmez.
+
+- Her danışman kendi e-postasıyla girer ve **yalnızca kendi eklediği öğrencileri** görür.
+- Yönetici; danışmanın şifresini yenileyebilir, pasif yapabilir veya silebilir (silinen danışmanın öğrencileri ve notları yöneticiye geçer).
+- Öğrenci aktarma: öğrenci → **Hesap** → **Başka danışmana aktar** (program, günlük ve danışman notları yeni danışmana geçer).
+
 ## Güncelleme 4 — çalışma saatleri ve saatli program
 
 Bu sürümü yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-3.sql` dosyasının tamamını yapıştır → **Run** (veri silmez). Sonra tüm dosyaları GitHub'a yükle (yeni dosya: `schedule.tsx`).

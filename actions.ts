@@ -184,6 +184,123 @@ export async function deleteStudent(token: string, studentId: string) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Danışman yönetimi (yalnızca yönetici = ilk kurulan danışman)         */
+/* ------------------------------------------------------------------ */
+
+export type CounselorRow = { id: string; full_name: string; email: string; active: boolean; students: number; isAdmin: boolean };
+
+async function adminCounselorId(db: SupabaseClient) {
+  const { data, error } = await db.from("profiles").select("id").eq("role", "counselor").order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (error) throw new Fail(error.message);
+  return (data?.id as string | undefined) ?? null;
+}
+
+async function requireAdmin(db: SupabaseClient, token: string) {
+  const me = await requireCounselor(db, token);
+  if ((await adminCounselorId(db)) !== me) throw new Fail("Bu işlemi yalnızca yönetici danışman yapabilir.");
+  return me;
+}
+
+async function requireOtherCounselor(db: SupabaseClient, me: string, id: string) {
+  if (id === me) throw new Fail("Bu işlem kendi hesabınız için yapılamaz.");
+  const { data } = await db.from("profiles").select("id, role").eq("id", id).maybeSingle();
+  if (!data || data.role !== "counselor") throw new Fail("Danışman bulunamadı.");
+}
+
+/** Danışman listesi. Yönetici değilse yalnızca isAdmin: false döner. */
+export async function listCounselors(token: string) {
+  return run(async () => {
+    const db = admin();
+    const me = await requireCounselor(db, token);
+    const adminId = await adminCounselorId(db);
+    if (adminId !== me) return { isAdmin: false, counselors: [] as CounselorRow[] };
+    const { data: rows, error } = await db.from("profiles").select("id, full_name, is_active, created_at").eq("role", "counselor").order("created_at");
+    if (error) throw new Fail(error.message);
+    const { data: studs } = await db.from("profiles").select("counselor_id").eq("role", "student");
+    const counts = new Map<string, number>();
+    for (const r of (studs ?? []) as { counselor_id: string | null }[]) if (r.counselor_id) counts.set(r.counselor_id, (counts.get(r.counselor_id) ?? 0) + 1);
+    const counselors: CounselorRow[] = [];
+    for (const r of (rows ?? []) as { id: string; full_name: string; is_active: boolean }[]) {
+      const { data: u } = await db.auth.admin.getUserById(r.id);
+      counselors.push({ id: r.id, full_name: r.full_name, email: u.user?.email ?? "", active: r.is_active, students: counts.get(r.id) ?? 0, isAdmin: r.id === adminId });
+    }
+    return { isAdmin: true, counselors };
+  });
+}
+
+export async function createCounselor(token: string, input: { fullName: string; email: string; password: string }) {
+  return run(async () => {
+    const db = admin();
+    await requireAdmin(db, token);
+    const fullName = str(input.fullName, 120);
+    const email = str(input.email).toLowerCase();
+    if (!fullName) throw new Fail("Ad soyad gerekli.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Fail("Geçerli bir e-posta girin.");
+    if (email.endsWith(`@${STUDENT_EMAIL_DOMAIN}`)) throw new Fail("Bu e-posta adresi kullanılamaz.");
+    const password = checkPassword(input.password);
+    const { data, error } = await db.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
+    if (error || !data.user) {
+      throw new Fail(/already|registered|exists/i.test(error?.message ?? "") ? "Bu e-posta ile zaten bir hesap var." : (error?.message ?? "Hesap oluşturulamadı."));
+    }
+    const { error: pErr } = await db.from("profiles").insert({ id: data.user.id, role: "counselor", full_name: fullName });
+    if (pErr) {
+      await db.auth.admin.deleteUser(data.user.id);
+      throw new Fail(pErr.message);
+    }
+    return {};
+  });
+}
+
+export async function updateCounselor(token: string, id: string, input: { password?: string; active?: boolean }) {
+  return run(async () => {
+    const db = admin();
+    const me = await requireAdmin(db, token);
+    await requireOtherCounselor(db, me, id);
+    if (input.password !== undefined) {
+      const { error } = await db.auth.admin.updateUserById(id, { password: checkPassword(input.password) });
+      if (error) throw new Fail(error.message);
+    }
+    if (typeof input.active === "boolean") {
+      const { error } = await db.auth.admin.updateUserById(id, { ban_duration: input.active ? "none" : "876000h" });
+      if (error) throw new Fail(error.message);
+      await db.from("profiles").update({ is_active: input.active }).eq("id", id);
+    }
+    return {};
+  });
+}
+
+/** Danışmanı siler; öğrencileri (ve bu öğrencilere yazdığı notlar) yöneticiye aktarılır. */
+export async function deleteCounselor(token: string, id: string) {
+  return run(async () => {
+    const db = admin();
+    const me = await requireAdmin(db, token);
+    await requireOtherCounselor(db, me, id);
+    const { error: nErr } = await db.from("counselor_notes").update({ counselor_id: me }).eq("counselor_id", id);
+    if (nErr) throw new Fail(nErr.message);
+    const { error: sErr } = await db.from("profiles").update({ counselor_id: me }).eq("role", "student").eq("counselor_id", id);
+    if (sErr) throw new Fail(sErr.message);
+    const { error } = await db.auth.admin.deleteUser(id);
+    if (error) throw new Fail(error.message);
+    return {};
+  });
+}
+
+/** Yönetici, kendi öğrencisini başka bir danışmana aktarır (danışman notları da aktarılır). */
+export async function transferStudent(token: string, studentId: string, targetCounselorId: string) {
+  return run(async () => {
+    const db = admin();
+    const me = await requireAdmin(db, token);
+    await requireOwnStudent(db, me, studentId);
+    const { data: t } = await db.from("profiles").select("id, role").eq("id", targetCounselorId).maybeSingle();
+    if (!t || t.role !== "counselor" || t.id === me) throw new Fail("Hedef danışman bulunamadı.");
+    const { error } = await db.from("profiles").update({ counselor_id: targetCounselorId }).eq("id", studentId);
+    if (error) throw new Fail(error.message);
+    await db.from("counselor_notes").update({ counselor_id: targetCounselorId }).eq("student_id", studentId).eq("counselor_id", me);
+    return {};
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Kazanım karnesi analizi — KODLA (yapay zekâ yok)                    */
 /* ------------------------------------------------------------------ */
 // Karne dosyası önce tarayıcıdan Supabase deposuna ("karneler") yüklenir; burada sunucu dosyayı
