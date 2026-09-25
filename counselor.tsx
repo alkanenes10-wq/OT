@@ -503,7 +503,7 @@ function Summary({ label, value, tone }: { label: string; value: string | number
   return (
     <div className="card px-3 py-3 sm:px-4">
       <p className="text-xs font-medium text-muted">{label}</p>
-      <p className={cx("mt-1 text-2xl font-semibold tabular", tone === "warning" && "text-warning")}>{value}</p>
+      <p className={cx("display mt-1 text-[28px] leading-tight tabular", tone === "warning" && "text-warning")}>{value}</p>
     </div>
   );
 }
@@ -737,7 +737,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           <Icon name="chevronLeft" size={16} /> Öğrenciler
         </A>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{student.full_name}</h1>
+          <h1 className="display text-2xl sm:text-[32px]">{student.full_name}</h1>
           {!student.is_active && <Badge tone="danger">Pasif</Badge>}
           {student.field && <Badge tone="primary">{student.field}</Badge>}
           {student.grade && <Badge>{student.grade}</Badge>}

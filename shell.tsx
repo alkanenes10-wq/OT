@@ -45,10 +45,10 @@ function OfflineBanner() {
 export function Logo() {
   return (
     <span className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-fg">
+      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-primary-fg">
         <Icon name="check" size={18} strokeWidth={2.6} />
       </span>
-      <span className="text-[15px] font-semibold tracking-tight">{APP_NAME}</span>
+      <span className="display text-[19px] font-semibold">{APP_NAME}</span>
     </span>
   );
 }
@@ -175,28 +175,67 @@ export function StudentShell({ children }: { children: ReactNode }) {
 
 export function CounselorShell({ children }: { children: ReactNode }) {
   const { route } = useRoute();
+  const { profile, signOut } = useAuth();
   const settings = route.v === "ayarlar";
   const link = (active: boolean) =>
     cx("hidden rounded-lg px-3 py-1.5 text-sm font-medium transition sm:inline-flex", active ? "bg-primary-soft text-primary-ink" : "text-muted hover:text-fg");
+  const side = (active: boolean) =>
+    cx(
+      "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition",
+      active ? "bg-surface font-semibold text-fg shadow-[0_1px_2px_rgba(31,42,46,0.06)]" : "text-muted hover:bg-surface/60 hover:text-fg",
+    );
+  const initials = (profile?.full_name ?? "?")
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toLocaleUpperCase("tr-TR");
   return (
-    <div className="min-h-dvh">
-      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
-          <A to={{}} aria-label="Öğrenciler">
-            <Logo />
+    <div className="min-h-dvh lg:flex">
+      {/* Masaüstü: sol menü */}
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-7 border-r border-line bg-surface-2 px-4 py-7 lg:flex">
+        <A to={{}} aria-label="Öğrenciler" className="px-2">
+          <Logo />
+        </A>
+        <nav className="flex flex-col gap-1" aria-label="Ana menü">
+          <A to={{}} className={side(!settings)}>
+            <Icon name="users" size={18} /> Öğrenciler
           </A>
-          <div className="flex items-center gap-1">
-            <A to={{}} className={link(!settings)}>
-              Öğrenciler
-            </A>
-            <A to={{ v: "ayarlar" }} className={link(settings)}>
-              Ayarlar
-            </A>
-            <UserMenu />
+          <A to={{ v: "ayarlar" }} className={side(settings)}>
+            <Icon name="settings" size={18} /> Ayarlar
+          </A>
+        </nav>
+        <div className="mt-auto flex items-center gap-2.5 border-t border-line px-1 pt-4">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary-ink">{initials}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-semibold">{profile?.full_name}</p>
+            <p className="text-xs text-muted">Danışman</p>
           </div>
+          <button onClick={() => signOut()} aria-label="Çıkış yap" className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface hover:text-danger">
+            <Icon name="logout" size={17} />
+          </button>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-5">{children}</main>
+      </aside>
+      <div className="min-w-0 flex-1">
+        {/* Telefon / tablet: üst çubuk */}
+        <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur lg:hidden">
+          <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
+            <A to={{}} aria-label="Öğrenciler">
+              <Logo />
+            </A>
+            <div className="flex items-center gap-1">
+              <A to={{}} className={link(!settings)}>
+                Öğrenciler
+              </A>
+              <A to={{ v: "ayarlar" }} className={link(settings)}>
+                Ayarlar
+              </A>
+              <UserMenu />
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto max-w-6xl px-4 pb-16 pt-5 lg:px-9 lg:pt-8">{children}</main>
+      </div>
     </div>
   );
 }
@@ -205,7 +244,7 @@ export function PageHeader({ title, subtitle, action }: { title: ReactNode; subt
   return (
     <div className="mb-4 flex items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        <h1 className="display text-2xl sm:text-[30px]">{title}</h1>
         {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -357,7 +396,7 @@ export function LoginScreen() {
       </div>
       <InstallHint />
       <div className="card p-6">
-        <h1 className="text-xl font-semibold">Giriş yap</h1>
+        <h1 className="display text-2xl">Giriş yap</h1>
         <p className="mt-1 text-sm text-muted">{APP_NAME} hesabınla devam et.</p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
           <Field label="Kullanıcı adı veya e-posta" htmlFor="login" hint="Öğrenciler kullanıcı adıyla, danışmanlar e-posta adresiyle girer.">
@@ -442,7 +481,7 @@ export function SetupScreen() {
         <Logo />
       </div>
       <div className="card p-6">
-        <h1 className="text-xl font-semibold">İlk kurulum</h1>
+        <h1 className="display text-2xl">İlk kurulum</h1>
         {status === "loading" && <PageLoader text="Kontrol ediliyor…" />}
         {status === "error" && (
           <div className="mt-4">

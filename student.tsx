@@ -91,7 +91,7 @@ function Today() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Merhaba {firstName}</h1>
+        <h1 className="display text-[28px] leading-tight">Merhaba {firstName}</h1>
         <p className="text-sm text-muted">{formatLong(today)}</p>
       </div>
       <InstallHint />

@@ -429,7 +429,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   return (
     <div className="card px-3 py-2.5">
       <p className="text-[11px] font-medium text-muted">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular">{value}</p>
+      <p className="display mt-0.5 text-[22px] tabular">{value}</p>
       {sub && <p className="text-[11px] text-faint tabular">{sub}</p>}
     </div>
   );

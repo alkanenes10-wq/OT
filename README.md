@@ -100,7 +100,7 @@ GitHub'da dosyayı düzenleyip kaydettiğinde Vercel otomatik yeniden yayınlar.
 
 - Program ders satırları, uyarı eşikleri (`THRESHOLDS`): `lib.ts`
 - Konu listeleri: `curriculum.ts` (konu **adını** değiştirirsen o konudaki eski ilerleme eşleşmez)
-- Renkler: `globals.css`
+- Renkler ve tema ("Sakin": krem zemin, petrol yeşili, Fraunces + IBM Plex Sans): `globals.css` (`:root` bölümü); yazı tipleri `layout.tsx`
 - Alan adı: Vercel → **Settings → Domains**
 
 ## Güvenlik ve KVKK

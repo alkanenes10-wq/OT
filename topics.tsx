@@ -105,7 +105,7 @@ export function TopicTracker({ studentId, studentName }: { studentId: string; st
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-sm text-muted">Genel ilerleme</p>
-            <p className="text-2xl font-semibold tabular">
+            <p className="display text-[26px] tabular">
               %{pct(stats.done, stats.total) ?? 0}
               <span className="ml-2 text-sm font-normal text-muted">
                 {stats.done} / {stats.total} konu
