@@ -2,7 +2,7 @@
 // Destek / risk yönlendirmesi.
 // Öğrenci: "Konuşmak istiyorum" butonu ve (otomatik uyarı olduğunda) nazik destek kartı.
 // Danışman: "Destek gerekenler" listesi ve öğrenci bazında tarihli takip kaydı.
-// Bu bir kriz müdahale aracı değildir; öğrenciye her zaman acil durumda 112 gösterilir.
+// Bu bir kriz müdahale aracı değildir; danışman mesajları uygulamayı açtığında görür.
 
 import { useCallback, useEffect, useState } from "react";
 import { A, errorText, sb } from "./db";
@@ -20,13 +20,9 @@ const when = (iso: string) => {
 
 function EmergencyNote() {
   return (
-    <div className="rounded-xl border border-danger/25 bg-danger-soft p-3 text-sm">
-      <p className="font-medium text-danger">Kendini tehlikede hissediyorsan beklemeden yardım al</p>
-      <p className="mt-1 text-fg">
-        Danışmanın bu mesajı uygulamayı açtığında görür, hemen göremeyebilir. Acil bir durumda <b>112</b>’yi ara ya da yanındaki güvendiğin bir yetişkine (ailen,
-        öğretmenin) hemen haber ver.
-      </p>
-    </div>
+    <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">
+      Danışmanın bu mesajı uygulamayı açtığında görür, hemen göremeyebilir. Beklemeden konuşmak istersen yanındaki güvendiğin bir yetişkine (ailen, öğretmenin) haber ver.
+    </p>
   );
 }
 

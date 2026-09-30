@@ -9,6 +9,7 @@ import { StudentInsights } from "./insights";
 import { addDays, type DailyLog, dayShort, diffDays, fmtNum, formatLong, pct, pickCurrentPlan, type PlanTask, todayISO, type WeeklyPlan, yesNo } from "./lib";
 import { byOrder, patchTask, TaskRow, WeeklyPlanView } from "./plan";
 import { ScheduleSection } from "./schedule";
+import { DailyReminderCard, EveningNudge, NextSessionCard, StartMode, YksCountdown, yksLabel } from "./ekler";
 import { StudentSupport } from "./support";
 import { InstallHint, PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
@@ -16,6 +17,7 @@ import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, P
 
 function Today() {
   const { profile } = useAuth();
+  const { go } = useRoute();
   const toast = useToast();
   const [plan, setPlan] = useState<WeeklyPlan | null>(null);
   const [tasks, setTasks] = useState<PlanTask[]>([]);
@@ -91,12 +93,18 @@ function Today() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="display text-[28px] leading-tight">Merhaba {firstName}</h1>
-        <p className="text-sm text-muted">{formatLong(today)}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="display text-[28px] leading-tight">Merhaba {firstName}</h1>
+          <p className="text-sm text-muted">{formatLong(today)}</p>
+          {yksLabel(profile.exam_year) && <p className="text-xs text-faint">{yksLabel(profile.exam_year)}</p>}
+        </div>
+        <YksCountdown examYear={profile.exam_year} />
       </div>
       <InstallHint />
       <StudentSupport variant="card" />
+      <EveningNudge hasTodayLog={Boolean(todayLog)} onOpen={() => go({ v: "gunluk" })} />
+      <NextSessionCard />
       {error && <ErrorBox>{error}</ErrorBox>}
 
       {yesterdayLog?.tomorrow_change && (
@@ -138,6 +146,8 @@ function Today() {
         )}
       </Card>
 
+      <StartMode />
+
       <Card
         title="Günlük takip"
         subtitle={todayLog ? "Bugünü değerlendirdin" : "Günün sonunda 1-2 dakikanı ayır"}
@@ -151,12 +161,12 @@ function Today() {
       >
         {todayLog ? (
           <dl className="grid grid-cols-3 gap-3 text-sm sm:grid-cols-6">
-            <Mini label="Uyku" value={todayLog.sleep_hours != null ? `${fmtNum(todayLog.sleep_hours)} sa` : "—"} />
-            <Mini label="Telefon" value={todayLog.phone_minutes != null ? `${todayLog.phone_minutes} dk` : "—"} />
-            <Mini label="Erteleme" value={yesNo(todayLog.procrastinated)} />
-            <Mini label="Kaygı" value={todayLog.anxiety ?? "—"} />
-            <Mini label="Enerji" value={todayLog.energy ?? "—"} />
-            <Mini label="Motivasyon" value={todayLog.motivation ?? "—"} />
+            <Mini label="Uyku" value={todayLog.sleep_hours != null ? `${fmtNum(todayLog.sleep_hours)} sa` : "—"} tone={todayLog.sleep_hours == null ? null : todayLog.sleep_hours < 6 ? "bad" : todayLog.sleep_hours < 7 ? "mid" : "good"} />
+            <Mini label="Telefon" value={todayLog.phone_minutes != null ? `${todayLog.phone_minutes} dk` : "—"} tone={todayLog.phone_minutes == null ? null : todayLog.phone_minutes > 180 ? "bad" : todayLog.phone_minutes > 90 ? "mid" : "good"} />
+            <Mini label="Erteleme" value={yesNo(todayLog.procrastinated)} tone={todayLog.procrastinated == null ? null : todayLog.procrastinated ? "mid" : "good"} />
+            <Mini label="Kaygı" value={todayLog.anxiety != null ? `${todayLog.anxiety}/5` : "—"} tone={todayLog.anxiety == null ? null : todayLog.anxiety >= 4 ? "bad" : todayLog.anxiety === 3 ? "mid" : "good"} />
+            <Mini label="Enerji" value={todayLog.energy != null ? `${todayLog.energy}/5` : "—"} tone={todayLog.energy == null ? null : todayLog.energy <= 2 ? "bad" : todayLog.energy === 3 ? "mid" : "good"} />
+            <Mini label="Motivasyon" value={todayLog.motivation != null ? `${todayLog.motivation}/5` : "—"} tone={todayLog.motivation == null ? null : todayLog.motivation <= 2 ? "bad" : todayLog.motivation === 3 ? "mid" : "good"} />
           </dl>
         ) : (
           <LinkButton to={{ v: "gunluk" }} icon="journal" className="w-full">
@@ -193,9 +203,14 @@ function Today() {
   );
 }
 
-function Mini({ label, value }: { label: string; value: string | number }) {
+function Mini({ label, value, tone = null }: { label: string; value: string | number; tone?: "good" | "mid" | "bad" | null }) {
   return (
-    <div className="rounded-xl bg-surface-2 px-2 py-2 text-center">
+    <div
+      className={cx(
+        "rounded-xl px-2 py-2 text-center",
+        tone === "bad" ? "bg-danger-soft text-danger" : tone === "mid" ? "bg-warning-soft text-warning" : tone === "good" ? "bg-success-soft text-success" : "bg-surface-2",
+      )}
+    >
       <dt className="text-[11px] text-muted">{label}</dt>
       <dd className="mt-0.5 font-semibold tabular">{value}</dd>
     </div>
@@ -228,7 +243,10 @@ function Daily() {
   return (
     <>
       <PageHeader title="Günlük takip" subtitle="Günün nasıl geçti? Dürüst ol — amaç kendini yargılamak değil, örüntüleri görmek." />
-      <DailyLogSection studentId={profile.id} studentName={profile.full_name} />
+      <div className="space-y-4">
+        <DailyReminderCard compact />
+        <DailyLogSection studentId={profile.id} studentName={profile.full_name} />
+      </div>
     </>
   );
 }
@@ -280,10 +298,11 @@ function Settings() {
           <Item label="Alan" value={profile.field ?? "—"} />
           <Item label="Sınıf" value={profile.grade ?? "—"} />
           <Item label="Sınav yılı" value={profile.exam_year ? String(profile.exam_year) : "—"} />
-          <Item label="Rehber öğretmen" value={counselor ?? "—"} />
+          <Item label="Danışmanım" value={counselor ?? "—"} />
         </dl>
         <p className="mt-3 text-xs text-faint">Bilgilerini danışmanın güncelleyebilir.</p>
       </Card>
+      <DailyReminderCard />
       <ChangeOwnPassword />
       <Button variant="danger" icon="logout" className="w-full" onClick={() => signOut()}>
         Çıkış yap

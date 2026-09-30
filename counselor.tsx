@@ -1,6 +1,8 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { CounselorSessions, WhatsAppReminder } from "./ekler";
+import { ParentReport } from "./veli-raporu";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS, isCompleted } from "./curriculum";
 import { DailyLogSection } from "./daily";
@@ -15,7 +17,7 @@ import { CounselorTeam, TransferStudent } from "./team";
 import { SupportInbox, SupportPanel } from "./support";
 import { PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
-import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast } from "./ui";
+import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast, type IconName } from "./ui";
 
 /* ---------------- Danışman notları (öğrenci göremez) ---------------- */
 export function CounselorNotes({ studentId }: { studentId: string }) {
@@ -690,14 +692,16 @@ function NewStudent() {
   );
 }
 
-type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "notlar" | "hesap";
-const TABS: { value: Tab; label: string; icon: "chart" | "calendar" | "clock" | "target" | "journal" | "book" | "note" | "user" }[] = [
+type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "gorusmeler" | "veli" | "notlar" | "hesap";
+const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "ozet", label: "Özet", icon: "chart" },
   { value: "program", label: "Program", icon: "calendar" },
   { value: "saatler", label: "Saatler", icon: "clock" },
   { value: "denemeler", label: "Denemeler", icon: "target" },
   { value: "gunluk", label: "Günlük", icon: "journal" },
   { value: "konular", label: "Konular", icon: "book" },
+  { value: "gorusmeler", label: "Görüşmeler", icon: "video" },
+  { value: "veli", label: "Veli raporu", icon: "printer" },
   { value: "notlar", label: "Notlar", icon: "note" },
   { value: "hesap", label: "Hesap", icon: "user" },
 ];
@@ -745,10 +749,13 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           {student.grade && <Badge>{student.grade}</Badge>}
           {student.exam_year && <Badge>YKS {student.exam_year}</Badge>}
         </div>
-        <p className="mt-0.5 text-sm text-muted">
-          @{student.username}
-          {student.target ? ` · Hedef: ${student.target}` : ""}
-        </p>
+        <div className="mt-0.5 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted">
+            @{student.username}
+            {student.target ? ` · Hedef: ${student.target}` : ""}
+          </p>
+          <WhatsAppReminder student={student} />
+        </div>
       </div>
 
       <Tabs tabs={TABS} value={tab} onChange={changeTab} />
@@ -779,6 +786,16 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         {tab === "konular" && (
           <div className="max-w-3xl">
             <TopicTracker studentId={student.id} studentName={student.full_name} />
+          </div>
+        )}
+        {tab === "gorusmeler" && (
+          <div className="max-w-3xl">
+            <CounselorSessions student={student} />
+          </div>
+        )}
+        {tab === "veli" && (
+          <div className="max-w-3xl">
+            <ParentReport student={student} />
           </div>
         )}
         {tab === "notlar" && (

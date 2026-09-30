@@ -166,6 +166,27 @@ const PATHS = {
       <path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </>
+  ),
+  play: <path d="M8 5.5v13l10.5-6.5z" />,
+  printer: (
+    <>
+      <path d="M7 8V3.5h10V8" />
+      <rect x="3.5" y="8" width="17" height="8.5" rx="2" />
+      <path d="M7 14h10v6.5H7z" />
+    </>
+  ),
+  video: (
+    <>
+      <rect x="3" y="6.5" width="12.5" height="11" rx="2" />
+      <path d="M15.5 10.5 21 7.5v9l-5.5-3" />
+    </>
+  ),
+  message: <path d="M4 5.5h16v10.5H9l-5 4z" />,
   key: (
     <>
       <circle cx="8" cy="15" r="4" />

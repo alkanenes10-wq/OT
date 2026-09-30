@@ -170,3 +170,44 @@
 .pt-safe {
   padding-top: env(safe-area-inset-top);
 }
+
+/* Yazdırma: yalnızca veli raporu basılır, açık renklerle */
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f3f1ec;
+    --fg: #1f2a2e;
+    --muted: #525d58;
+    --faint: #66706b;
+    --border: #e4dfd3;
+    --primary: #1f5e5b;
+    --success: #2f6b3f;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #veli-raporu,
+  #veli-raporu * {
+    visibility: visible;
+  }
+  #veli-raporu {
+    position: absolute;
+    inset: 0 0 auto 0;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

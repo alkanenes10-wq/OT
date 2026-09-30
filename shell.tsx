@@ -46,7 +46,10 @@ export function Logo() {
   return (
     <span className="flex items-center gap-2">
       <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-primary-fg">
-        <Icon name="check" size={18} strokeWidth={2.6} />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 17.5l4.5-4.5 3.5 3.5L19 9" />
+          <circle cx="19" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
+        </svg>
       </span>
       <span className="display text-[19px] font-semibold">{APP_NAME}</span>
     </span>

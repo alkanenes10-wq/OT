@@ -199,7 +199,7 @@ export function personalInsight(key: VarKey, allLogs: DailyLog[]): PersonalInsig
       const p = avg(prev7.map((l) => num(l.sleep_hours)));
       const short = last7.filter((l) => Number(l.sleep_hours) < 7).length;
       status = a < 6 ? "problem" : a < 7 || short >= 3 ? "watch" : "good";
-      headline = `Son ${last7.length} kayıtta ortalama ${fmtNum(a)} saat uyumuşsun; ${short} gece 7 saatin altında kalmış.`;
+      headline = `Son ${last7.length} kayıt: ortalama ${fmtNum(a)} saat uyku; ${short} gece 7 saatin altında.`;
       if (p != null) findings.push(`Bir önceki döneme göre ${a >= p ? "+" : ""}${fmtNum(a - p)} saat (${fmtNum(p)} → ${fmtNum(a)}).`);
       const en = compare(logs, (l) => (l.sleep_hours == null ? null : Number(l.sleep_hours) < 7), (l) => l.energy);
       if (en && en.b - en.a >= 0.5) findings.push(`7 saatten az uyuduğun günlerde enerjin ortalama ${fmtNum(en.a)}/5; 7 saat ve üzeri uyuduğun günlerde ${fmtNum(en.b)}/5.`);
@@ -214,7 +214,7 @@ export function personalInsight(key: VarKey, allLogs: DailyLog[]): PersonalInsig
       const p = avg(prev7.map((l) => l.phone_minutes));
       const high = last7.filter((l) => (l.phone_minutes ?? 0) > 120).length;
       status = a > 180 ? "problem" : a > 90 || high >= 3 ? "watch" : "good";
-      headline = `Son ${last7.length} kayıtta günde ortalama ${fmtNum(a, 0)} dakika dikkat dağıtıcıya gitmiş; bu, haftada yaklaşık ${fmtNum((a * 7) / 60, 0)} saat demek.`;
+      headline = `Son ${last7.length} kayıt: günde ortalama ${fmtNum(a, 0)} dakika dikkat dağıtıcı; haftada yaklaşık ${fmtNum((a * 7) / 60, 0)} saat.`;
       if (p != null) findings.push(`Bir önceki döneme göre ${a >= p ? "+" : ""}${fmtNum(a - p, 0)} dk (${fmtNum(p, 0)} → ${fmtNum(a, 0)}).`);
       const pr = rate(logs, (l) => (l.phone_minutes == null ? null : l.phone_minutes > 120), (l) => l.procrastinated);
       if (pr && pr.a - pr.b >= 0.2)
@@ -227,7 +227,7 @@ export function personalInsight(key: VarKey, allLogs: DailyLog[]): PersonalInsig
     case "procrastinated": {
       const yes = last7.filter((l) => l.procrastinated).length;
       status = yes >= 4 ? "problem" : yes >= 3 ? "watch" : "good";
-      headline = `Son ${last7.length} kaydın ${yes} gününde erteleme yaşamışsın.`;
+      headline = `Son ${last7.length} kaydın ${yes} gününde erteleme var.`;
       const ax = compare(logs, (l) => l.procrastinated, (l) => l.anxiety);
       if (ax && ax.a - ax.b >= 0.5) findings.push(`Ertelediğin günlerde kaygın ortalama ${fmtNum(ax.a)}/5, ertelemediğin günlerde ${fmtNum(ax.b)}/5. Erteleme kaygıdan kaçışla bağlantılı olabilir.`);
       const ph = compare(logs, (l) => l.procrastinated, (l) => l.phone_minutes);
@@ -240,7 +240,7 @@ export function personalInsight(key: VarKey, allLogs: DailyLog[]): PersonalInsig
     case "replanned": {
       const yes = last7.filter((l) => l.replanned).length;
       status = yes >= 4 ? "problem" : yes >= 3 ? "watch" : "good";
-      headline = `Son ${last7.length} kaydın ${yes} gününde planını yeniden düzenlemişsin.`;
+      headline = `Son ${last7.length} kaydın ${yes} gününde plan yeniden düzenlenmiş.`;
       const pr = rate(logs, (l) => l.replanned, (l) => l.procrastinated);
       if (pr && pr.a - pr.b >= 0.2) findings.push(`Plan değiştirdiğin günlerde erteleme oranın ${pctText(pr.a * pr.aN, pr.aN)}; diğer günlerde ${pctText(pr.b * pr.bN, pr.bN)}. Plan değişikliği ertelemenin sonucu olabilir.`);
       const obs = ownWords(logs, (l) => l.obstacle, (l) => l.replanned === true);
@@ -257,7 +257,7 @@ export function personalInsight(key: VarKey, allLogs: DailyLog[]): PersonalInsig
       if (key === "anxiety") {
         const hi = last7.filter((l) => (l.anxiety ?? 0) >= 4).length;
         status = a >= 4 || hi >= 3 ? "problem" : a >= 3.3 || hi >= 2 ? "watch" : "good";
-        headline = `Son ${last7.length} kayıtta kaygın ortalama ${fmtNum(a)}/5; ${hi} gün 4 veya 5 işaretlemişsin.`;
+        headline = `Son ${last7.length} kayıt: kaygı ortalaması ${fmtNum(a)}/5; ${hi} gün 4 veya 5.`;
         const sl = compare(logs, (l) => (l.anxiety == null ? null : l.anxiety >= 4), (l) => num(l.sleep_hours));
         if (sl && sl.b - sl.a >= 0.5) findings.push(`Kaygının yüksek olduğu günlerde ortalama ${fmtNum(sl.a)} saat, diğer günlerde ${fmtNum(sl.b)} saat uyumuşsun.`);
         const pr = rate(logs, (l) => (l.anxiety == null ? null : l.anxiety >= 4), (l) => l.procrastinated);
@@ -266,7 +266,7 @@ export function personalInsight(key: VarKey, allLogs: DailyLog[]): PersonalInsig
       } else {
         const low = last7.filter((l) => (l[key] ?? 5) <= 2).length;
         status = a <= 2 || low >= 3 ? "problem" : a < 3 || low >= 2 ? "watch" : "good";
-        headline = `Son ${last7.length} kayıtta ${name} ortalaman ${fmtNum(a)}/5; ${low} gün 1 veya 2 işaretlemişsin.`;
+        headline = `Son ${last7.length} kayıt: ${name} ortalaması ${fmtNum(a)}/5; ${low} gün 1 veya 2.`;
         const sl = compare(logs, (l) => (l[key] == null ? null : (l[key] as number) <= 2), (l) => num(l.sleep_hours));
         if (sl && sl.b - sl.a >= 0.5) findings.push(`${key === "energy" ? "Enerjinin" : "Motivasyonunun"} düşük olduğu günlerde ortalama ${fmtNum(sl.a)} saat, diğer günlerde ${fmtNum(sl.b)} saat uyumuşsun.`);
         const pr = rate(logs, (l) => (l[key] == null ? null : (l[key] as number) <= 2), (l) => l.procrastinated);

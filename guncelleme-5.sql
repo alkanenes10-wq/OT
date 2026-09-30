@@ -1,5 +1,5 @@
 -- =====================================================================
--- GÜNCELLEME 5 — Ayrıntılı destek uyarıları
+-- GÜNCELLEME 5 — Ayrıntılı destek uyarıları + görüşme takvimi
 -- Mevcut kurulumda Supabase → SQL Editor'de BİR KEZ çalıştırın (veri silmez,
 -- tekrar çalıştırmak güvenlidir). guncelleme-4.sql daha önce çalıştırılmış olmalı.
 --
@@ -8,6 +8,7 @@
 --   • bunun neden önemli olduğu
 --   • danışmana önerilen adım
 --   • öğrenciye gösterilecek, kendi verisine dayanan açıklama
+-- Ayrıca: danışman–öğrenci görüşme takvimi (öğrenci notları göremez).
 -- =====================================================================
 
 -- 1) Ayrıntı sütunu
@@ -197,5 +198,46 @@ $$;
 
 revoke all on function public.support_evidence(uuid), public.check_support_risk(), public.request_support(text), public.support_prompt() from anon, public;
 grant execute on function public.request_support(text), public.support_prompt() to authenticated;
+
+-- 5) Görüşme takvimi
+create table if not exists public.counseling_sessions (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references public.profiles (id) on delete cascade,
+  counselor_id uuid references public.profiles (id) on delete set null default auth.uid(),
+  starts_at    timestamptz not null,
+  duration_min int not null default 45 check (duration_min between 10 and 240),
+  mode         text not null default 'online' check (mode in ('online', 'yuz_yuze', 'telefon')),
+  link         text check (char_length(link) <= 500),
+  topic        text not null default '' check (char_length(topic) <= 200),
+  status       text not null default 'planned' check (status in ('planned', 'done', 'cancelled')),
+  notes        text not null default '' check (char_length(notes) <= 3000), -- yalnızca danışman görür
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  updated_by   uuid references public.profiles (id) on delete set null default auth.uid()
+);
+create index if not exists counseling_sessions_student_idx on public.counseling_sessions (student_id, starts_at);
+
+drop trigger if exists counseling_sessions_touch on public.counseling_sessions;
+create trigger counseling_sessions_touch before update on public.counseling_sessions
+  for each row execute function public.touch_row();
+
+alter table public.counseling_sessions enable row level security;
+drop policy if exists counseling_sessions_counselor on public.counseling_sessions;
+create policy counseling_sessions_counselor on public.counseling_sessions for all to authenticated
+  using (public.is_counselor_of(student_id)) with check (public.is_counselor_of(student_id));
+revoke all on public.counseling_sessions from anon, authenticated;
+grant select, insert, update, delete on public.counseling_sessions to authenticated;
+
+-- Öğrenci kendi görüşmelerini notlar OLMADAN görür
+create or replace function public.my_sessions()
+returns table (id uuid, starts_at timestamptz, duration_min int, mode text, link text, topic text, status text)
+language sql stable security definer set search_path = '' as $$
+  select s.id, s.starts_at, s.duration_min, s.mode, s.link, s.topic, s.status
+  from public.counseling_sessions s
+  where s.student_id = auth.uid() and s.starts_at > now() - interval '30 days'
+  order by s.starts_at;
+$$;
+revoke all on function public.my_sessions() from anon, public;
+grant execute on function public.my_sessions() to authenticated;
 
 notify pgrst, 'reload schema';
