@@ -7,7 +7,7 @@ import { A, errorText, sb } from "./db";
 import { type CounselingSession, downloadIcs, MODE_LABEL, type SessionMode, waLink, whenText } from "./ekler";
 import { addDays, DAY_SHORT, formatTR, type Profile, todayISO } from "./lib";
 import { PageHeader } from "./shell";
-import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Icon, IconButton, Modal, PageLoader, useToast } from "./ui";
+import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, Modal, PageLoader, useToast } from "./ui";
 
 type Row = CounselingSession & { student_id: string };
 
@@ -74,6 +74,14 @@ export function CounselorCalendar() {
     const { error } = await sb().from("counseling_sessions").update(values).eq("id", s.id);
     if (error) return toast.show(errorText(error), "danger");
     if (msg) toast.show(msg);
+    load();
+  }
+
+  async function remove(s: Row) {
+    if (!confirmAction(`${names.get(s.student_id) ?? "Öğrenci"} ile ${whenText(s.starts_at)} görüşmesi silinsin mi? Notlarıyla birlikte kalıcı olarak silinir.`)) return;
+    const { error } = await sb().from("counseling_sessions").delete().eq("id", s.id);
+    if (error) return toast.show(errorText(error), "danger");
+    toast.show("Görüşme silindi");
     load();
   }
 
@@ -167,6 +175,7 @@ export function CounselorCalendar() {
                 <Button size="sm" variant={s.reminded_at ? "ghost" : "primary"} icon="message" onClick={() => remind(s)}>
                   {s.reminded_at ? "Tekrar" : "WhatsApp hatırlat"}
                 </Button>
+                <IconButton icon="trash" label="Görüşmeyi sil" onClick={() => remove(s)} />
               </li>
             ))}
           </ul>
@@ -221,8 +230,9 @@ export function CounselorCalendar() {
                           {names.get(s.student_id) ?? "Öğrenci"}
                         </A>
                         {s.topic && <p className="truncate text-muted">{s.topic}</p>}
-                        {s.status === "planned" && (
-                          <div className="mt-1 flex flex-wrap gap-1">
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {s.status === "planned" && (
+                            <>
                             <button type="button" className="rounded bg-surface px-1.5 py-0.5 font-medium text-primary" onClick={() => remind(s)}>
                               {s.reminded_at ? "✓ Hatırlatıldı" : "Hatırlat"}
                             </button>
@@ -232,8 +242,12 @@ export function CounselorCalendar() {
                             <button type="button" className="rounded bg-surface px-1.5 py-0.5 text-muted" onClick={() => patch(s, { status: "cancelled" }, "İptal edildi")}>
                               İptal
                             </button>
-                          </div>
-                        )}
+                            </>
+                          )}
+                          <button type="button" className="rounded bg-surface px-1.5 py-0.5 text-danger" onClick={() => remove(s)} aria-label="Görüşmeyi sil">
+                            Sil
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>

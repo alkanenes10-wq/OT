@@ -474,9 +474,9 @@ function StudentList() {
       ) : rows ? (
         <>
           <div className="mb-4 grid grid-cols-3 gap-3">
-            <Summary label="Aktif öğrenci" value={activeRows.length} />
-            <Summary label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
-            <Summary label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
+            <Summary icon="users" label="Aktif öğrenci" value={activeRows.length} />
+            <Summary icon="journal" label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
+            <Summary icon="alert" label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
           </div>
           <TodaySessionsStrip />
           <SupportInbox names={new Map((rows ?? []).map((r) => [r.student.id, r.student.full_name]))} />
@@ -506,11 +506,16 @@ function StudentList() {
   );
 }
 
-function Summary({ label, value, tone }: { label: string; value: string | number; tone?: "warning" }) {
+function Summary({ label, value, tone, icon }: { label: string; value: string | number; tone?: "warning"; icon: IconName }) {
   return (
-    <div className="card px-3 py-3 sm:px-4">
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className={cx("display mt-1 text-[28px] leading-tight tabular", tone === "warning" && "text-warning")}>{value}</p>
+    <div className="card flex items-center gap-3 px-3 py-3 sm:px-5 sm:py-4">
+      <span className={cx("hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex", tone === "warning" ? "bg-warning-soft text-warning" : "bg-primary-soft text-primary-ink")}>
+        <Icon name={icon} size={20} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-muted">{label}</span>
+        <span className={cx("display mt-0.5 block text-[26px] leading-tight tabular", tone === "warning" && "text-warning")}>{value}</span>
+      </span>
     </div>
   );
 }
@@ -519,11 +524,21 @@ function StudentCard({ row }: { row: Row }) {
   const s = row.student;
   const logTone = !row.lastLog ? "text-faint" : row.lastLog === todayISO() ? "text-success" : "text-muted";
   return (
-    <A to={{ v: "ogrenci", id: s.id }} className="card block h-full p-4 transition hover:border-primary/50 hover:shadow-sm">
+    <A to={{ v: "ogrenci", id: s.id }} className="card block h-full p-4 transition hover:border-primary/40 sm:p-5">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{s.full_name}</p>
-          <p className="truncate text-xs text-faint">@{s.username}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary-ink">
+            {s.full_name
+              .split(/\s+/)
+              .map((w) => w[0])
+              .slice(0, 2)
+              .join("")
+              .toLocaleUpperCase("tr-TR")}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-semibold capitalize">{s.full_name.toLocaleLowerCase("tr-TR")}</p>
+            <p className="truncate text-xs text-faint">@{s.username}</p>
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1">
           {!s.is_active && <Badge tone="danger">Pasif</Badge>}
@@ -531,7 +546,7 @@ function StudentCard({ row }: { row: Row }) {
           {s.grade && <Badge>{s.grade}</Badge>}
         </div>
       </div>
-      <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+      <dl className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-sm">
         <div>
           <dt className="text-[11px] text-muted">Son günlük</dt>
           <dd className={cx("font-medium", logTone)}>{relativeDay(row.lastLog)}</dd>

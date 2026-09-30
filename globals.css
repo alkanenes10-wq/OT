@@ -5,76 +5,80 @@
    --------------------------------------------------------------- */
 :root {
   color-scheme: light;
-  /* "Sakin" tema: krem zemin, petrol yeşili vurgu */
-  --bg: #f6f4ef;
+  /* Profesyonel tema: soğuk açık gri zemin, beyaz yüzeyler, petrol yeşili vurgu */
+  --bg: #f5f6f8;
   --surface: #ffffff;
-  --surface-2: #f2efe8;
-  --fg: #1f2a2e;
-  --muted: #525d58;
-  --faint: #66706b;
-  --border: #e4dfd3;
-  --primary: #1f5e5b;
-  --primary-hover: #184b49;
+  --surface-2: #f1f3f6;
+  --fg: #101828;
+  --muted: #475467;
+  --faint: #667085;
+  --border: #e4e7ec;
+  --primary: #0e7066;
+  --primary-hover: #0b5c54;
   --primary-fg: #ffffff;
-  --primary-soft: #e3ecea;
-  --primary-ink: #1a4f4c;
-  --success: #2f6b3f;
-  --success-soft: #e6f0e6;
-  --warning: #8a5a12;
-  --warning-soft: #f6ecd9;
-  --danger: #a83a2e;
-  --danger-soft: #f7e4e0;
-  --ring: rgba(31, 94, 91, 0.3);
+  --primary-soft: #e7f4f2;
+  --primary-ink: #0b5c54;
+  --success: #067647;
+  --success-soft: #e8f6ee;
+  --warning: #b54708;
+  --warning-soft: #fef3e6;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --ring: rgba(14, 112, 102, 0.22);
   /* sayısal / sözel */
-  --say: #2e6a8e;
-  --say-soft: #e8f0f5;
-  --soz: #a5561f;
-  --soz-soft: #f7ece3;
+  --say: #1f5fa8;
+  --say-soft: #eaf1fb;
+  --soz: #b4531f;
+  --soz-soft: #fcefe6;
 
   /* grafikler */
-  --series-1: #2e6a8e;
-  --series-2: #b5622e;
-  --series-3: #1f5e5b;
-  --grid: #e8e4da;
-  --axis: #c9c3b5;
-  --chart-ink: #4a524e;
-  --chart-muted: #857f73;
+  --series-1: #1f5fa8;
+  --series-2: #d9722e;
+  --series-3: #0e7066;
+  --grid: #eceff3;
+  --axis: #cfd4dc;
+  --chart-ink: #344054;
+  --chart-muted: #667085;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --bg: #131716;
-    --surface: #1a1f1e;
-    --surface-2: #212726;
-    --fg: #edebe5;
-    --muted: #b9bfb9;
-    --faint: #939b95;
-    --border: #2d3432;
-    --primary: #6fb3ad;
-    --primary-hover: #86c2bd;
-    --primary-fg: #0e1716;
-    --primary-soft: #1c2f2d;
-    --primary-ink: #a6d6d1;
-    --success: #6cc387;
-    --success-soft: #16281c;
-    --warning: #e0ad5c;
-    --warning-soft: #2e2413;
-    --danger: #ee8a7d;
-    --danger-soft: #34201c;
-    --ring: rgba(111, 179, 173, 0.4);
-    --say: #7fb1d6;
-    --say-soft: #172834;
-    --soz: #e79a6a;
+    --bg: #0c1117;
+    --surface: #131a22;
+    --surface-2: #1a2330;
+    --fg: #eceff3;
+    --muted: #aab4c3;
+    --faint: #8a95a6;
+    --border: #243041;
+    --primary: #3cc4b3;
+    --primary-hover: #5fd3c4;
+    --primary-fg: #04201d;
+    --primary-soft: #12312e;
+    --primary-ink: #9fe9df;
+    --success: #4ccb8a;
+    --success-soft: #11291d;
+    --warning: #f0a44e;
+    --warning-soft: #2f2112;
+    --danger: #f07a6c;
+    --danger-soft: #331b18;
+    --ring: rgba(60, 196, 179, 0.35);
+    --say: #7fb1e8;
+    --say-soft: #162536;
+    --soz: #eb9a68;
     --soz-soft: #33231a;
 
-    --series-1: #6fa6d0;
-    --series-2: #e08a55;
-    --series-3: #6fb3ad;
-    --grid: #2b302e;
-    --axis: #3e4542;
-    --chart-ink: #c9c6bd;
-    --chart-muted: #8e8a80;
+    --series-1: #7fb1e8;
+    --series-2: #eb9a68;
+    --series-3: #3cc4b3;
+    --grid: #1f2935;
+    --axis: #354254;
+    --chart-ink: #cfd6e0;
+    --chart-muted: #8a95a6;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
   }
 }
 
@@ -101,8 +105,8 @@
   --color-say-soft: var(--say-soft);
   --color-soz: var(--soz);
   --color-soz-soft: var(--soz-soft);
-  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @layer base {
@@ -120,6 +124,7 @@
     color: var(--fg);
     font-family: var(--font-sans);
     min-height: 100dvh;
+    word-spacing: 0.06em;
   }
   :focus-visible {
     outline: 2px solid var(--primary);
@@ -145,13 +150,19 @@
   }
   .card {
     @apply rounded-2xl border border-line bg-surface;
-    box-shadow: 0 1px 2px rgba(31, 42, 46, 0.04);
+    box-shadow: var(--shadow-sm);
+  }
+  a.card:hover,
+  button.card:hover {
+    box-shadow: var(--shadow-md);
   }
   .display {
     font-family: var(--font-display);
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    font-optical-sizing: auto;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-wider text-faint uppercase;
   }
   .no-scrollbar {
     scrollbar-width: none;

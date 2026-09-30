@@ -233,16 +233,16 @@ type Variant = "primary" | "secondary" | "ghost" | "danger" | "soft";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-primary text-primary-fg hover:bg-primary-hover border border-transparent",
-  secondary: "bg-surface text-fg border border-line hover:bg-surface-2",
+  primary: "bg-primary text-primary-fg hover:bg-primary-hover border border-transparent shadow-[var(--shadow-sm)]",
+  secondary: "bg-surface text-fg border border-line hover:bg-surface-2 shadow-[var(--shadow-sm)]",
   ghost: "bg-transparent text-muted hover:bg-surface-2 hover:text-fg border border-transparent",
   danger: "bg-danger-soft text-danger border border-transparent hover:brightness-95",
   soft: "bg-primary-soft text-primary-ink border border-transparent hover:brightness-95",
 };
 const SIZES: Record<Size, string> = {
-  sm: "h-9 px-3 text-sm gap-1.5 rounded-lg",
-  md: "h-11 px-4 text-[15px] gap-2 rounded-xl",
-  lg: "h-12 px-5 text-base gap-2 rounded-xl",
+  sm: "h-9 px-3.5 text-sm gap-1.5 rounded-full",
+  md: "h-11 px-5 text-[15px] gap-2 rounded-full",
+  lg: "h-12 px-6 text-base gap-2 rounded-full",
 };
 
 export function Button({
@@ -265,7 +265,7 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex select-none items-center justify-center font-medium whitespace-nowrap transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
+        "inline-flex select-none items-center justify-center font-semibold whitespace-nowrap transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
         VARIANTS[variant],
         SIZES[size],
         className,
@@ -296,7 +296,7 @@ export function LinkButton({
     <A
       to={to}
       className={cx(
-        "inline-flex select-none items-center justify-center font-medium whitespace-nowrap transition active:scale-[0.98]",
+        "inline-flex select-none items-center justify-center font-semibold whitespace-nowrap transition active:scale-[0.98]",
         VARIANTS[variant],
         SIZES[size],
         className,
@@ -659,7 +659,7 @@ export function Tabs<T extends string>({
 }) {
   return (
     <div className="no-scrollbar -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div role="tablist" className="inline-flex min-w-full gap-1 border-b border-line">
+      <div role="tablist" className="inline-flex gap-1 rounded-full border border-line bg-surface p-1 shadow-[var(--shadow-sm)]">
         {tabs.map((t) => {
           const active = t.value === value;
           return (
@@ -670,8 +670,8 @@ export function Tabs<T extends string>({
               aria-selected={active}
               onClick={() => onChange(t.value)}
               className={cx(
-                "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition",
-                active ? "border-primary text-primary-ink" : "border-transparent text-muted hover:text-fg",
+                "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium whitespace-nowrap transition",
+                active ? "bg-primary text-primary-fg shadow-[var(--shadow-sm)]" : "text-muted hover:bg-surface-2 hover:text-fg",
               )}
             >
               {t.icon && <Icon name={t.icon} size={16} />}

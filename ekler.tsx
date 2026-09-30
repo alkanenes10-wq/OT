@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText, fetchLogs, fetchPlans, sb } from "./db";
 import { addDays, diffDays, formatLong, isRealTask, pickCurrentPlan, type PlanTask, type Profile, todayISO } from "./lib";
-import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Icon, Modal, PageLoader, Segmented, useToast } from "./ui";
+import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, Modal, PageLoader, Segmented, useToast } from "./ui";
 
 /* ================================================================== */
 /* Yardımcılar                                                         */
@@ -448,6 +448,14 @@ export function CounselorSessions({ student }: { student: Profile }) {
     load();
   }
 
+  async function removeSession(s: CounselingSession) {
+    if (!confirmAction(`${whenText(s.starts_at)} görüşmesi silinsin mi? Notlarıyla birlikte kalıcı olarak silinir.`)) return;
+    const { error } = await sb().from("counseling_sessions").delete().eq("id", s.id);
+    if (error) return toast.show(errorText(error), "danger");
+    toast.show("Görüşme silindi");
+    load();
+  }
+
   async function patch(s: CounselingSession, values: Partial<CounselingSession>) {
     const { error } = await sb().from("counseling_sessions").update(values).eq("id", s.id);
     if (error) return toast.show(errorText(error), "danger");
@@ -537,6 +545,9 @@ export function CounselorSessions({ student }: { student: Profile }) {
                   <Button size="sm" variant="ghost" onClick={() => patch(s, { status: "cancelled" })}>
                     İptal
                   </Button>
+                  <Button size="sm" variant="ghost" icon="trash" onClick={() => removeSession(s)}>
+                    Sil
+                  </Button>
                 </div>
               </li>
             ))}
@@ -550,7 +561,10 @@ export function CounselorSessions({ student }: { student: Profile }) {
             {past.map((s) => (
               <li key={s.id} className="rounded-xl border border-line p-3 text-sm">
                 <p className="flex flex-wrap items-center gap-2 font-semibold">
-                  {whenText(s.starts_at)}
+                  <span className="flex-1">{whenText(s.starts_at)}</span>
+                  <button type="button" onClick={() => removeSession(s)} className="order-last rounded-lg p-1 text-faint hover:bg-danger-soft hover:text-danger" aria-label="Görüşmeyi sil">
+                    <Icon name="trash" size={16} />
+                  </button>
                   <Badge tone={s.status === "done" ? "success" : s.status === "cancelled" ? "neutral" : "warning"}>
                     {s.status === "done" ? "Yapıldı" : s.status === "cancelled" ? "İptal" : "Bekliyor"}
                   </Badge>
