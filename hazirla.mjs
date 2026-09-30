@@ -29,6 +29,8 @@ const APP_FILES = [
   "team.tsx",
   "support.tsx",
   "karne.ts",
+  "degiskenler.ts",
+  "rehber.tsx",
 ];
 
 mkdirSync("app", { recursive: true });

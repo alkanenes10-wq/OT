@@ -5,6 +5,7 @@ import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { COURSES, courseTopicIds, isCompleted } from "./curriculum";
 import { errorText, fetchLogs, fetchPlans, fetchTopicProgress, sb } from "./db";
 import { addDays, avg, computeSignals, type DailyLog, fmtNum, formatShort, pct, pickCurrentPlan, type PlanTask, rangeDates, type Signal, todayISO, type TopicProgress, type WeeklyPlan } from "./lib";
+import { DetailedSignalList, VariablesCard } from "./rehber";
 import { Card, cx, EmptyState, ErrorBox, Icon, PageLoader, ProgressBar, Segmented } from "./ui";
 
 /** Kapsayıcının genişliğini ölçer; grafik hiçbir zaman kapsayıcıdan taşmaz. */
@@ -466,8 +467,8 @@ export function StudentInsights({ studentId, showSignals = false }: { studentId:
   return (
     <div className="space-y-4">
       {showSignals && (
-        <Card title="Dikkat edilecekler" subtitle="Son 14 gün · tanı değil, görüşmede konuşulabilecek gözlemler">
-          <SignalList signals={signals} empty="Belirgin bir uyarı yok." />
+        <Card title="Dikkat edilecekler" subtitle="Son 14 gün · tanı değil, görüşmede konuşulabilecek gözlemler · ayrıntı için uyarıya dokun">
+          <DetailedSignalList signals={signals} empty="Belirgin bir uyarı yok." />
         </Card>
       )}
 
@@ -498,6 +499,8 @@ export function StudentInsights({ studentId, showSignals = false }: { studentId:
           sub={`${procAnswered} ve ${replanAnswered} yanıtlı günde`}
         />
       </div>
+
+      <VariablesCard logs={logs.filter((l) => l.log_date >= addDays(todayISO(), -59))} audience={showSignals ? "counselor" : "student"} />
 
       {inRange.length === 0 ? (
         <Card>

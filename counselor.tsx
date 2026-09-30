@@ -773,7 +773,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         )}
         {tab === "gunluk" && (
           <div className="max-w-3xl">
-            <DailyLogSection studentId={student.id} studentName={student.full_name} />
+            <DailyLogSection studentId={student.id} studentName={student.full_name} audience="counselor" />
           </div>
         )}
         {tab === "konular" && (

@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { A, errorText, sb } from "./db";
-import { SUPPORT_ACTIONS, relativeDay, type SupportAction, type SupportActionKind, type SupportAlert } from "./lib";
+import { SUPPORT_ACTIONS, relativeDay, type SupportAction, type SupportActionKind, type SupportAlert, type SupportDetail } from "./lib";
 import { Badge, Button, Card, ErrorBox, Icon, Modal, cx, useToast } from "./ui";
 
 const when = (iso: string) => {
@@ -106,12 +106,13 @@ export function SupportModal({ onClose, onSent }: { onClose: () => void; onSent?
 /** Öğrencinin Bugün ekranı: otomatik uyarı varsa destek kartı, her zaman "konuşmak istiyorum" bağlantısı */
 export function StudentSupport({ variant }: { variant: "card" | "link" }) {
   const toast = useToast();
-  const [state, setState] = useState<{ show: boolean; requested_at: string | null } | null>(null);
+  const [state, setState] = useState<{ show: boolean; details?: string[]; requested_at: string | null } | null>(null);
+  const [more, setMore] = useState(false);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await sb().rpc("support_prompt");
-    if (!error && data) setState(data as { show: boolean; requested_at: string | null });
+    if (!error && data) setState(data as { show: boolean; details?: string[]; requested_at: string | null });
   }, []);
   useEffect(() => {
     load();
@@ -136,6 +137,22 @@ export function StudentSupport({ variant }: { variant: "card" | "link" }) {
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Son günlerde zorlanıyor gibisin</p>
               <p className="mt-0.5 text-sm text-muted">Günlük takibindeki cevaplar biraz yorgun ve kaygılı olduğunu gösteriyor. Danışmanınla konuşmak ister misin?</p>
+              {!!state.details?.length && (
+                <div className="mt-2">
+                  <button type="button" className="text-sm font-medium text-primary hover:underline" aria-expanded={more} onClick={() => setMore((m) => !m)}>
+                    {more ? "Ayrıntıyı gizle" : "Bunu neden görüyorum?"}
+                  </button>
+                  {more && (
+                    <ul className="mt-2 space-y-2 text-sm">
+                      {state.details.map((d) => (
+                        <li key={d} className="rounded-lg bg-surface p-2.5">
+                          {d}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" icon="heart" onClick={() => setOpen(true)}>
                   Konuşmak istiyorum
@@ -237,7 +254,7 @@ export function SupportInbox({ names }: { names: Map<string, string> }) {
                   <span className="text-xs font-normal text-muted">{STATUS_LABEL[a.status]}</span>
                 </span>
                 <span className="block truncate text-xs text-muted">
-                  {a.student_note ? `“${a.student_note}”` : a.reasons.join(" · ")} · {when(a.created_at)}
+                  {a.student_note ? `“${a.student_note}”` : (a.details?.length ? a.details.map((d) => d.title) : a.reasons).join(" · ")} · {when(a.created_at)}
                 </span>
               </span>
               <Icon name="chevronRight" size={18} className="text-faint" />
@@ -246,6 +263,40 @@ export function SupportInbox({ names }: { names: Map<string, string> }) {
         ))}
       </ul>
     </Card>
+  );
+}
+
+/** Otomatik uyarının ayrıntıları: kanıt, neden önemli, önerilen adım */
+function AlertDetails({ details }: { details: SupportDetail[] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {details.map((d) => (
+        <div key={d.title} className="rounded-lg bg-surface p-3 text-sm">
+          <p className="font-semibold">{d.title}</p>
+          {!!d.evidence?.length && (
+            <ul className="mt-1.5 space-y-0.5 text-fg">
+              {d.evidence.map((e) => (
+                <li key={e} className="tabular">
+                  {e}
+                </li>
+              ))}
+            </ul>
+          )}
+          {d.why && (
+            <p className="mt-1.5 text-muted">
+              <span className="font-semibold text-fg">Neden önemli? </span>
+              {d.why}
+            </p>
+          )}
+          {d.next_step && (
+            <p className="mt-1.5 rounded-md bg-primary-soft px-2.5 py-1.5 text-primary-ink">
+              <span className="font-semibold">Önerilen adım: </span>
+              {d.next_step}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -327,12 +378,16 @@ export function SupportPanel({ studentId }: { studentId: string }) {
           <span className="text-xs text-muted">{when(a.created_at)}</span>
         </div>
         {a.student_note && <p className="mt-2 rounded-lg bg-surface p-2 text-sm">“{a.student_note}”</p>}
-        {a.source === "auto" && (
-          <ul className="mt-2 list-disc pl-5 text-sm text-fg">
-            {a.reasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
+        {a.details?.length ? (
+          <AlertDetails details={a.details} />
+        ) : (
+          a.source === "auto" && (
+            <ul className="mt-2 list-disc pl-5 text-sm text-fg">
+              {a.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          )
         )}
         {a.source === "auto" && a.student_dismissed_at && <p className="mt-1 text-xs text-muted">Öğrenci destek kartını “Şimdilik iyiyim” ile kapattı ({when(a.student_dismissed_at)}).</p>}
 
@@ -396,7 +451,7 @@ export function SupportPanel({ studentId }: { studentId: string }) {
         )}
         {showClosed && closed.map(renderAlert)}
         {error && <ErrorBox>{error}</ErrorBox>}
-        <p className="text-xs text-muted">Uyarıları yalnızca öğrencinin danışmanı görür; öğrenci uyarı nedenlerini ve bu notları göremez.</p>
+        <p className="text-xs text-muted">Uyarıları yalnızca öğrencinin danışmanı görür. Öğrenci yalnızca kendi kayıtlarından çıkan kısa açıklamayı görür; önerilen adımları ve bu notları göremez.</p>
       </div>
     </Card>
   );
