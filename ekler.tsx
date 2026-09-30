@@ -77,22 +77,30 @@ function safeSet(key: string, v: string) {
 /* YKS geri sayımı                                                     */
 /* ================================================================== */
 
+/** Öğrencinin sınav yılı geçmişse veya yoksa bir sonraki YKS'yi kullanır. */
+function nextYks(examYear: number | null): { year: number; date: string; estimated: boolean } | null {
+  const today = todayISO();
+  const own = examYear ? YKS_DATES[examYear] : undefined;
+  if (own && own.date >= today) return { year: examYear as number, ...own };
+  const next = Object.entries(YKS_DATES)
+    .map(([y, v]) => ({ year: Number(y), ...v }))
+    .filter((x) => x.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  return next ?? null;
+}
+
 export function yksLabel(examYear: number | null): string | null {
-  const info = examYear ? YKS_DATES[examYear] : undefined;
-  if (!info || diffDays(todayISO(), info.date) < 0) return null;
-  return `YKS ${examYear}: ${formatLong(info.date)}${info.estimated ? " (tahmini)" : ""}`;
+  const info = nextYks(examYear);
+  if (!info) return null;
+  return `YKS ${info.year}: ${formatLong(info.date)}${info.estimated ? " (tahmini)" : ""}`;
 }
 
 export function YksCountdown({ examYear }: { examYear: number | null }) {
-  const info = examYear ? YKS_DATES[examYear] : undefined;
+  const info = nextYks(examYear);
   if (!info) return null;
   const days = diffDays(todayISO(), info.date);
-  if (days < 0) return null;
   return (
-    <div
-      className="flex shrink-0 flex-col items-center rounded-2xl bg-primary px-3 py-2 text-primary-fg"
-      title={`YKS ${examYear}: ${formatLong(info.date)}${info.estimated ? " (tahmini; ÖSYM henüz açıklamadı)" : ""}`}
-    >
+    <div className="flex shrink-0 flex-col items-center rounded-2xl bg-primary px-3 py-2 text-primary-fg" title={yksLabel(examYear) ?? undefined}>
       <span className="display text-2xl leading-none tabular">{days}</span>
       <span className="mt-0.5 text-[11px] font-medium opacity-90">gün kaldı</span>
     </div>
