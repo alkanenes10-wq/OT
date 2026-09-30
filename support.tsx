@@ -26,13 +26,6 @@ function EmergencyNote() {
         Danışmanın bu mesajı uygulamayı açtığında görür, hemen göremeyebilir. Acil bir durumda <b>112</b>’yi ara ya da yanındaki güvendiğin bir yetişkine (ailen,
         öğretmenin) hemen haber ver.
       </p>
-      <a
-        href="tel:112"
-        className="mt-2 inline-flex h-11 items-center gap-2 rounded-xl bg-danger px-4 text-sm font-semibold text-white"
-        aria-label="112 acil çağrı merkezini ara"
-      >
-        <Icon name="phone" size={17} /> 112’yi ara
-      </a>
     </div>
   );
 }
