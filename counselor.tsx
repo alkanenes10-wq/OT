@@ -3,6 +3,8 @@
 
 import { CounselorSessions, WhatsAppReminder } from "./ekler";
 import { ParentReport } from "./veli-raporu";
+import { QuestionBank } from "./soru-bankasi";
+import { CounselorCalendar, TodaySessionsStrip } from "./takvim";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS, isCompleted } from "./curriculum";
 import { DailyLogSection } from "./daily";
@@ -476,6 +478,7 @@ function StudentList() {
             <Summary label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
             <Summary label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
           </div>
+          <TodaySessionsStrip />
           <SupportInbox names={new Map((rows ?? []).map((r) => [r.student.id, r.student.full_name]))} />
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <div className="relative min-w-0 flex-1">
@@ -692,7 +695,7 @@ function NewStudent() {
   );
 }
 
-type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "gorusmeler" | "veli" | "notlar" | "hesap";
+type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "sorular" | "gorusmeler" | "veli" | "notlar" | "hesap";
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "ozet", label: "Özet", icon: "chart" },
   { value: "program", label: "Program", icon: "calendar" },
@@ -700,6 +703,7 @@ const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "denemeler", label: "Denemeler", icon: "target" },
   { value: "gunluk", label: "Günlük", icon: "journal" },
   { value: "konular", label: "Konular", icon: "book" },
+  { value: "sorular", label: "Sorular", icon: "question" },
   { value: "gorusmeler", label: "Görüşmeler", icon: "video" },
   { value: "veli", label: "Veli raporu", icon: "printer" },
   { value: "notlar", label: "Notlar", icon: "note" },
@@ -788,6 +792,11 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
             <TopicTracker studentId={student.id} studentName={student.full_name} />
           </div>
         )}
+        {tab === "sorular" && (
+          <div className="max-w-3xl">
+            <QuestionBank studentId={student.id} audience="counselor" />
+          </div>
+        )}
         {tab === "gorusmeler" && (
           <div className="max-w-3xl">
             <CounselorSessions student={student} />
@@ -866,6 +875,7 @@ export function CounselorApp() {
   const { route } = useRoute();
   if (route.v === "yeni") return <NewStudent />;
   if (route.v === "ayarlar") return <CounselorSettings />;
+  if (route.v === "takvim") return <CounselorCalendar />;
   if (route.v === "ogrenci" && route.id) return <StudentDetail key={route.id} id={route.id} tab={route.t} />;
   return <StudentList />;
 }

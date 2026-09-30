@@ -10,6 +10,7 @@ import { addDays, type DailyLog, dayShort, diffDays, fmtNum, formatLong, pct, pi
 import { byOrder, patchTask, TaskRow, WeeklyPlanView } from "./plan";
 import { ScheduleSection } from "./schedule";
 import { DailyReminderCard, EveningNudge, NextSessionCard, StartMode, YksCountdown, yksLabel } from "./ekler";
+import { QuestionBank, QuestionBankTeaser } from "./soru-bankasi";
 import { StudentSupport } from "./support";
 import { InstallHint, PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
@@ -147,6 +148,7 @@ function Today() {
       </Card>
 
       <StartMode />
+      <QuestionBankTeaser studentId={profile.id} />
 
       <Card
         title="Günlük takip"
@@ -262,6 +264,17 @@ function Topics() {
   );
 }
 
+function Questions() {
+  const { profile } = useAuth();
+  if (!profile) return null;
+  return (
+    <>
+      <PageHeader title="Soru bankası" subtitle="Yapamadığın soruları sakla, cevabına bak, onlardan test çöz." />
+      <QuestionBank studentId={profile.id} audience="student" />
+    </>
+  );
+}
+
 function Progress() {
   const { profile } = useAuth();
   if (!profile) return null;
@@ -330,6 +343,8 @@ export function StudentApp() {
       return <Daily />;
     case "konular":
       return <Topics />;
+    case "sorular":
+      return <Questions />;
     case "ilerleme":
       return <Progress />;
     case "ayarlar":

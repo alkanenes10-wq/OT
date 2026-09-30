@@ -39,6 +39,7 @@ import {
   type TopicProgress,
   type WeeklyPlan,
 } from "./lib";
+import { CopyDaysModal } from "./ekler";
 import { buildTimedPlan, type DraftTask, type HistoryTask } from "./planner";
 import {
   Badge,
@@ -1589,6 +1590,7 @@ function DayDetails({
   const [minutes, setMinutes] = useState<string>(current?.study_minutes != null ? String(current.study_minutes) : "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const blockMinutes = blocks.reduce((s, b) => {
     const a = timeToMinutes(b.start);
@@ -1727,6 +1729,11 @@ function DayDetails({
           >
             Aralık ekle
           </Button>
+          {blocks.some((b) => b.start && b.end) && (
+            <Button variant="ghost" size="sm" icon="copy" onClick={() => setCopyOpen(true)}>
+              Bu saatleri diğer günlere kopyala
+            </Button>
+          )}
         </div>
 
         <Field label="Notlar" htmlFor={`notes-${dayIndex}`}>
@@ -1742,6 +1749,36 @@ function DayDetails({
             placeholder="Günün notları…"
           />
         </Field>
+
+        {copyOpen && (
+          <CopyDaysModal
+            source={dayIndex}
+            labels={Array.from({ length: 7 }, (_, i) => dayName(addDays(plan.start_date, i)))}
+            weekdayIdx={Array.from({ length: 7 }, (_, i) => i).filter((i) => {
+              const w = parseISODate(addDays(plan.start_date, i)).getDay();
+              return w >= 1 && w <= 5;
+            })}
+            weekendIdx={Array.from({ length: 7 }, (_, i) => i).filter((i) => {
+              const w = parseISODate(addDays(plan.start_date, i)).getDay();
+              return w === 0 || w === 6;
+            })}
+            onClose={() => setCopyOpen(false)}
+            onApply={async (targets) => {
+              const clean = blocks.filter((b) => b.start && b.end).map((b) => ({ start: b.start, end: b.end, label: b.label.trim().slice(0, 120) }));
+              const { data, error } = await sb()
+                .from("plan_days")
+                .upsert(
+                  targets.map((t) => ({ plan_id: plan.id, day_index: t, student_id: studentId, time_blocks: clean })),
+                  { onConflict: "plan_id,day_index" },
+                )
+                .select("*");
+              if (error) return toast.show(errorText(error), "danger");
+              for (const d of (data ?? []) as PlanDay[]) onSaved(d);
+              toast.show(`Saatler ${targets.length} güne kopyalandı`);
+              setCopyOpen(false);
+            }}
+          />
+        )}
 
         <div className="flex items-center justify-end gap-3">
           {dirty && <span className="text-xs text-warning">Kaydedilmemiş değişiklik var</span>}

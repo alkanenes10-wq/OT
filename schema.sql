@@ -665,7 +665,7 @@ grant execute on function public.request_support(text), public.support_prompt(),
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
--- Ayrıntılı destek uyarıları ve görüşme takvimi (güncelleme 5 ile aynı)
+-- Ayrıntılı uyarılar, görüşme takvimi, soru bankası (güncelleme 5 ile aynı)
 -- ---------------------------------------------------------------------
 -- 1) Ayrıntı sütunu
 alter table public.support_alerts add column if not exists details jsonb not null default '[]'::jsonb;
@@ -867,10 +867,12 @@ create table if not exists public.counseling_sessions (
   topic        text not null default '' check (char_length(topic) <= 200),
   status       text not null default 'planned' check (status in ('planned', 'done', 'cancelled')),
   notes        text not null default '' check (char_length(notes) <= 3000), -- yalnızca danışman görür
+  reminded_at  timestamptz,                                                 -- hatırlatma gönderildi
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   updated_by   uuid references public.profiles (id) on delete set null default auth.uid()
 );
+alter table public.counseling_sessions add column if not exists reminded_at timestamptz;
 create index if not exists counseling_sessions_student_idx on public.counseling_sessions (student_id, starts_at);
 
 drop trigger if exists counseling_sessions_touch on public.counseling_sessions;
@@ -895,5 +897,71 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke all on function public.my_sessions() from anon, public;
 grant execute on function public.my_sessions() to authenticated;
+
+-- 6) Soru bankası: öğrencinin çözemediği sorular (fotoğraf) ve bunlardan hazırlanan testler
+create table if not exists public.question_items (
+  id             uuid primary key default gen_random_uuid(),
+  student_id     uuid not null references public.profiles (id) on delete cascade,
+  image_path     text not null check (char_length(image_path) <= 300),
+  subject        text not null default '' check (char_length(subject) <= 60),
+  topic_id       text check (char_length(topic_id) <= 80),
+  source         text not null default '' check (char_length(source) <= 120),
+  note           text not null default '' check (char_length(note) <= 1000),
+  answer         text check (answer in ('A', 'B', 'C', 'D', 'E')),
+  solution_path  text check (char_length(solution_path) <= 300),
+  solution_note  text not null default '' check (char_length(solution_note) <= 2000),
+  status         text not null default 'open' check (status in ('open', 'learned')),
+  attempts       int not null default 0 check (attempts >= 0),
+  correct_count  int not null default 0 check (correct_count >= 0),
+  last_result    text check (last_result in ('correct', 'wrong', 'empty')),
+  created_by     uuid references public.profiles (id) on delete set null default auth.uid(),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  updated_by     uuid references public.profiles (id) on delete set null default auth.uid()
+);
+create index if not exists question_items_student_idx on public.question_items (student_id, created_at desc);
+
+create table if not exists public.question_tests (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references public.profiles (id) on delete cascade,
+  title        text not null default '' check (char_length(title) <= 120),
+  question_ids uuid[] not null default '{}',
+  answers      jsonb not null default '{}'::jsonb check (jsonb_typeof(answers) = 'object'),
+  correct      int,
+  total        int,
+  created_by   uuid references public.profiles (id) on delete set null default auth.uid(),
+  created_at   timestamptz not null default now(),
+  finished_at  timestamptz
+);
+create index if not exists question_tests_student_idx on public.question_tests (student_id, created_at desc);
+
+drop trigger if exists question_items_touch on public.question_items;
+create trigger question_items_touch before update on public.question_items
+  for each row execute function public.touch_row();
+
+alter table public.question_items enable row level security;
+alter table public.question_tests enable row level security;
+drop policy if exists question_items_access on public.question_items;
+create policy question_items_access on public.question_items for all to authenticated
+  using (public.can_access_student(student_id)) with check (public.can_access_student(student_id));
+drop policy if exists question_tests_access on public.question_tests;
+create policy question_tests_access on public.question_tests for all to authenticated
+  using (public.can_access_student(student_id)) with check (public.can_access_student(student_id));
+revoke all on public.question_items, public.question_tests from anon, authenticated;
+grant select, insert, update, delete on public.question_items, public.question_tests to authenticated;
+
+-- Fotoğraflar: özel depo, klasör = öğrenci kimliği (öğrenci ve danışmanı erişir)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('sorular', 'sorular', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+drop policy if exists sorular_select on storage.objects;
+create policy sorular_select on storage.objects for select to authenticated
+  using (bucket_id = 'sorular' and public.can_access_student_path(name));
+drop policy if exists sorular_insert on storage.objects;
+create policy sorular_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'sorular' and public.can_access_student_path(name));
+drop policy if exists sorular_delete on storage.objects;
+create policy sorular_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'sorular' and public.can_access_student_path(name));
 
 notify pgrst, 'reload schema';

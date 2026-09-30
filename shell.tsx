@@ -64,6 +64,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: { v: "program" }, label: "Program", icon: "calendar" },
   { to: { v: "gunluk" }, label: "Günlük", icon: "journal" },
   { to: { v: "konular" }, label: "Konular", icon: "book" },
+  { to: { v: "sorular" }, label: "Sorular", icon: "question" },
   { to: { v: "ilerleme" }, label: "İlerleme", icon: "chart" },
 ];
 
@@ -155,7 +156,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto max-w-3xl px-4 pb-28 pt-4 md:pb-12">{children}</main>
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur md:hidden" aria-label="Alt menü">
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {STUDENT_NAV.map((item) => {
             const active = isActive(item);
             return (
@@ -180,6 +181,7 @@ export function CounselorShell({ children }: { children: ReactNode }) {
   const { route } = useRoute();
   const { profile, signOut } = useAuth();
   const settings = route.v === "ayarlar";
+  const calendar = route.v === "takvim";
   const link = (active: boolean) =>
     cx("hidden rounded-lg px-3 py-1.5 text-sm font-medium transition sm:inline-flex", active ? "bg-primary-soft text-primary-ink" : "text-muted hover:text-fg");
   const side = (active: boolean) =>
@@ -201,8 +203,11 @@ export function CounselorShell({ children }: { children: ReactNode }) {
           <Logo />
         </A>
         <nav className="flex flex-col gap-1" aria-label="Ana menü">
-          <A to={{}} className={side(!settings)}>
+          <A to={{}} className={side(!settings && !calendar)}>
             <Icon name="users" size={18} /> Öğrenciler
+          </A>
+          <A to={{ v: "takvim" }} className={side(calendar)}>
+            <Icon name="calendar" size={18} /> Takvim
           </A>
           <A to={{ v: "ayarlar" }} className={side(settings)}>
             <Icon name="settings" size={18} /> Ayarlar
@@ -227,8 +232,11 @@ export function CounselorShell({ children }: { children: ReactNode }) {
               <Logo />
             </A>
             <div className="flex items-center gap-1">
-              <A to={{}} className={link(!settings)}>
+              <A to={{}} className={link(!settings && !calendar)}>
                 Öğrenciler
+              </A>
+              <A to={{ v: "takvim" }} className={link(calendar)}>
+                Takvim
               </A>
               <A to={{ v: "ayarlar" }} className={link(settings)}>
                 Ayarlar

@@ -187,6 +187,13 @@ const PATHS = {
     </>
   ),
   message: <path d="M4 5.5h16v10.5H9l-5 4z" />,
+  question: (
+    <>
+      <rect x="4" y="3.5" width="16" height="17" rx="2.5" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3" />
+      <path d="M12 16.8h.01" />
+    </>
+  ),
   key: (
     <>
       <circle cx="8" cy="15" r="4" />

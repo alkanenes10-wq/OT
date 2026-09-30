@@ -33,6 +33,8 @@ const APP_FILES = [
   "rehber.tsx",
   "ekler.tsx",
   "veli-raporu.tsx",
+  "soru-bankasi.tsx",
+  "takvim.tsx",
 ];
 
 mkdirSync("app", { recursive: true });

@@ -326,14 +326,15 @@ export type CounselingSession = {
   topic: string;
   status: "planned" | "done" | "cancelled";
   notes?: string;
+  reminded_at?: string | null;
 };
 
-const MODE_LABEL: Record<SessionMode, string> = { online: "Online", yuz_yuze: "Yüz yüze", telefon: "Telefon" };
-const whenText = (iso: string) => {
+export const MODE_LABEL: Record<SessionMode, string> = { online: "Online", yuz_yuze: "Yüz yüze", telefon: "Telefon" };
+export const whenText = (iso: string) => {
   const d = new Date(iso);
   return `${d.toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })} ${d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`;
 };
-const sessionIcs = (s: CounselingSession, who: string) =>
+export const sessionIcs = (s: CounselingSession, who: string) =>
   downloadIcs("gorusme.ics", [
     {
       uid: `gorusme-${s.id}`,
@@ -360,14 +361,21 @@ export function NextSessionCard() {
       });
   }, []);
   if (!next) return null;
-  const soon = new Date(next.starts_at).getTime() - Date.now() < 30 * 60000;
+  const ms = new Date(next.starts_at).getTime() - Date.now();
+  const soon = ms < 30 * 60000;
+  const sameDay = new Date(next.starts_at).toDateString() === new Date().toDateString();
+  const within24 = ms < 24 * 3600000;
+  const heading = soon ? "Görüşmen başlamak üzere" : sameDay ? "Bugün görüşmen var" : within24 ? "Yarın görüşmen var" : "Sıradaki görüşmen";
   return (
-    <div className="card flex items-start gap-3 p-4">
+    <div className={cx("card flex items-start gap-3 p-4", within24 && "border-primary/40 bg-primary-soft/50")}>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary-ink">
         <Icon name="video" size={19} />
       </span>
       <div className="min-w-0 flex-1 text-sm">
-        <p className="font-semibold">Sıradaki görüşmen</p>
+        <p className="flex items-center gap-1.5 font-semibold">
+          {within24 && <Icon name="bell" size={15} className="text-primary" />}
+          {heading}
+        </p>
         <p className="text-fg">{whenText(next.starts_at)}</p>
         <p className="text-muted">
           {MODE_LABEL[next.mode]} · {next.duration_min} dk{next.topic ? ` · ${next.topic}` : ""}
@@ -668,5 +676,93 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
         )}
       </Modal>
     </>
+  );
+}
+
+/* ================================================================== */
+/* Bir günün saatlerini diğer günlere kopyalama                        */
+/* ================================================================== */
+
+export function CopyDaysModal({
+  source,
+  labels,
+  weekdayIdx = [0, 1, 2, 3, 4],
+  weekendIdx = [5, 6],
+  onClose,
+  onApply,
+}: {
+  source: number;
+  labels: string[];
+  weekdayIdx?: number[];
+  weekendIdx?: number[];
+  onClose: () => void;
+  onApply: (targets: number[]) => void | Promise<void>;
+}) {
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const others = labels.map((_, i) => i).filter((i) => i !== source);
+  const pick = (idx: number[]) => setSel(new Set(idx.filter((i) => i !== source)));
+  const toggle = (i: number) =>
+    setSel((s) => {
+      const n = new Set(s);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`${labels[source]} saatlerini kopyala`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button
+            icon="copy"
+            disabled={!sel.size}
+            loading={busy}
+            onClick={async () => {
+              setBusy(true);
+              await onApply([...sel].sort((a, b) => a - b));
+              setBusy(false);
+            }}
+          >
+            {sel.size ? `${sel.size} güne kopyala` : "Gün seç"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" variant="secondary" onClick={() => pick(weekdayIdx)}>
+            Hafta içi
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => pick(weekendIdx)}>
+            Hafta sonu
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => pick(others)}>
+            Tüm günler
+          </Button>
+          {sel.size > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>
+              Temizle
+            </Button>
+          )}
+        </div>
+        <ul className="grid grid-cols-2 gap-2">
+          {others.map((i) => (
+            <li key={i}>
+              <label className={cx("flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm", sel.has(i) ? "border-primary bg-primary-soft" : "border-line")}>
+                <input type="checkbox" checked={sel.has(i)} onChange={() => toggle(i)} />
+                {labels[i]}
+              </label>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted">Seçilen günlerdeki mevcut saatlerin yerine {labels[source]} günündeki saatler yazılır.</p>
+      </div>
+    </Modal>
   );
 }
