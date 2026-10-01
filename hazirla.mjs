@@ -28,13 +28,10 @@ const APP_FILES = [
   "schedule.tsx",
   "team.tsx",
   "support.tsx",
+  "notes.tsx",
+  "calendar.tsx",
+  "progress.tsx",
   "karne.ts",
-  "degiskenler.ts",
-  "rehber.tsx",
-  "ekler.tsx",
-  "veli-raporu.tsx",
-  "soru-bankasi.tsx",
-  "takvim.tsx",
 ];
 
 mkdirSync("app", { recursive: true });

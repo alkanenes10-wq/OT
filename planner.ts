@@ -71,12 +71,15 @@ export type TimedPlanInput = {
   excluded: string[];
   /** Sıralama: [sayısal, sözel] blok sayısı; [1,1] = bir sayısal bir sözel */
   pattern?: [number, number];
+  /** Tüm deneme analizleri: birden çok denemede tekrarlayan yanlışlar öne alınır */
+  allAnalyses?: Pick<ExamAnalysis, "exam_date" | "exam_type" | "results">[];
 };
 
 export type TimedPlan = {
   tasks: DraftTask[];
   blocks: PlanBlock[];
   candidates: Candidate[]; // haftada kullanılan konular (öncelik sırasıyla)
+  pool: Candidate[]; // tüm aday konular (önizlemede "başka konu" için)
   dayMinutes: number[];
   stats: { sayisal: number; sozel: number; tyt: number; ayt: number; questions: number };
 };
@@ -143,6 +146,11 @@ export function buildCandidates(input: TimedPlanInput): Candidate[] {
       deficit.set(r.topic_id, cur);
     }
   }
+  // Kaç farklı denemede yanlış/boş yapılmış (kronik eksik)
+  const chronic = new Map<string, number>();
+  for (const a of input.allAnalyses ?? []) {
+    for (const r of a.results ?? []) if ((r.wrong ?? 0) + (r.empty ?? 0) > 0) chronic.set(r.topic_id, (chronic.get(r.topic_id) ?? 0) + 1);
+  }
   // Geçmiş: en son hangi hafta, hangi türle, tamamlandı mı
   const hist = new Map<string, { weeksAgo: number; lastTypes: Set<TaskType>; lastDone: boolean; pending: TaskType | null }>();
   const lastPlan = input.history.reduce<string | null>((m, h) => (h.plan_start < input.start && (!m || h.plan_start > m) ? h.plan_start : m), null);
@@ -176,6 +184,12 @@ export function buildCandidates(input: TimedPlanInput): Candidate[] {
         score += 10 + 6 * (def.wrong + 0.7 * def.empty);
         mode = st === "not_started" ? "konu" : "tekrar";
         reasons.push(`${def.exam} denemesi: ${def.wrong} yanlış${def.empty ? `, ${def.empty} boş` : ""}`);
+      }
+      const times = chronic.get(t.id) ?? 0;
+      if (times >= 2) {
+        score += 4 * Math.min(times, 5);
+        if (!def) mode = st === "not_started" ? "konu" : "tekrar";
+        reasons.push(`${times} denemede yanlış/boş`);
       }
       if (input.carryOver && h?.pending) {
         score += 9;
@@ -337,6 +351,7 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
     tasks,
     blocks,
     candidates: candidates.filter((c) => c.uses > 0),
+    pool: candidates,
     dayMinutes,
     stats: {
       sayisal: catCounts.sayisal,

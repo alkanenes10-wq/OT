@@ -166,34 +166,6 @@ const PATHS = {
       <path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9" />
     </>
   ),
-  bell: (
-    <>
-      <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z" />
-      <path d="M10 20.5a2 2 0 0 0 4 0" />
-    </>
-  ),
-  play: <path d="M8 5.5v13l10.5-6.5z" />,
-  printer: (
-    <>
-      <path d="M7 8V3.5h10V8" />
-      <rect x="3.5" y="8" width="17" height="8.5" rx="2" />
-      <path d="M7 14h10v6.5H7z" />
-    </>
-  ),
-  video: (
-    <>
-      <rect x="3" y="6.5" width="12.5" height="11" rx="2" />
-      <path d="M15.5 10.5 21 7.5v9l-5.5-3" />
-    </>
-  ),
-  message: <path d="M4 5.5h16v10.5H9l-5 4z" />,
-  question: (
-    <>
-      <rect x="4" y="3.5" width="16" height="17" rx="2.5" />
-      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3" />
-      <path d="M12 16.8h.01" />
-    </>
-  ),
   key: (
     <>
       <circle cx="8" cy="15" r="4" />
@@ -233,16 +205,16 @@ type Variant = "primary" | "secondary" | "ghost" | "danger" | "soft";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-primary text-primary-fg hover:bg-primary-hover border border-transparent shadow-[var(--shadow-sm)]",
-  secondary: "bg-surface text-fg border border-line hover:bg-surface-2 shadow-[var(--shadow-sm)]",
+  primary: "bg-primary text-primary-fg hover:bg-primary-hover border border-transparent",
+  secondary: "bg-surface text-fg border border-line hover:bg-surface-2",
   ghost: "bg-transparent text-muted hover:bg-surface-2 hover:text-fg border border-transparent",
   danger: "bg-danger-soft text-danger border border-transparent hover:brightness-95",
   soft: "bg-primary-soft text-primary-ink border border-transparent hover:brightness-95",
 };
 const SIZES: Record<Size, string> = {
-  sm: "h-9 px-3.5 text-sm gap-1.5 rounded-full",
-  md: "h-11 px-5 text-[15px] gap-2 rounded-full",
-  lg: "h-12 px-6 text-base gap-2 rounded-full",
+  sm: "h-9 px-3 text-sm gap-1.5 rounded-lg",
+  md: "h-11 px-4 text-[15px] gap-2 rounded-xl",
+  lg: "h-12 px-5 text-base gap-2 rounded-xl",
 };
 
 export function Button({
@@ -265,7 +237,7 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex select-none items-center justify-center font-semibold whitespace-nowrap transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
+        "inline-flex select-none items-center justify-center font-medium whitespace-nowrap transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55",
         VARIANTS[variant],
         SIZES[size],
         className,
@@ -296,7 +268,7 @@ export function LinkButton({
     <A
       to={to}
       className={cx(
-        "inline-flex select-none items-center justify-center font-semibold whitespace-nowrap transition active:scale-[0.98]",
+        "inline-flex select-none items-center justify-center font-medium whitespace-nowrap transition active:scale-[0.98]",
         VARIANTS[variant],
         SIZES[size],
         className,
@@ -659,7 +631,7 @@ export function Tabs<T extends string>({
 }) {
   return (
     <div className="no-scrollbar -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div role="tablist" className="inline-flex gap-1 rounded-full border border-line bg-surface p-1 shadow-[var(--shadow-sm)]">
+      <div role="tablist" className="inline-flex min-w-full gap-1 border-b border-line">
         {tabs.map((t) => {
           const active = t.value === value;
           return (
@@ -670,8 +642,8 @@ export function Tabs<T extends string>({
               aria-selected={active}
               onClick={() => onChange(t.value)}
               className={cx(
-                "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium whitespace-nowrap transition",
-                active ? "bg-primary text-primary-fg shadow-[var(--shadow-sm)]" : "text-muted hover:bg-surface-2 hover:text-fg",
+                "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition",
+                active ? "border-primary text-primary-ink" : "border-transparent text-muted hover:text-fg",
               )}
             >
               {t.icon && <Icon name={t.icon} size={16} />}

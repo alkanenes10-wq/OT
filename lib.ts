@@ -68,15 +68,12 @@ export type SupportAlert = {
   student_id: string;
   source: "auto" | "student";
   reasons: string[];
-  /** Ayrıntılar (güncelleme 5): kanıt, neden önemli, önerilen adım, öğrenciye açıklama */
-  details?: SupportDetail[] | null;
   student_note: string | null;
   status: SupportStatus;
   student_dismissed_at: string | null;
   created_at: string;
   updated_at: string;
 };
-export type SupportDetail = { title: string; evidence?: string[]; why?: string; next_step?: string; student_text?: string };
 export type SupportActionKind = "seen" | "contacted" | "parent" | "school" | "referred" | "note" | "closed";
 export type SupportAction = {
   id: string;
@@ -525,16 +522,7 @@ export function normalizeSubject(s: string): string {
 // Danışman için "dikkat" göstergeleri. Bunlar tanı değil, görüşmede konuşulabilecek
 // gözlemlerdir. Eşik değerlerini buradan değiştirebilirsiniz.
 
-export type Signal = {
-  level: "critical" | "warning" | "info";
-  text: string;
-  /** İlgili değişken (açıklama için), ör. "anxiety" */
-  key?: string;
-  /** Uyarıya yol açan kayıtlar: tarih ve değerler */
-  evidence?: string[];
-  /** Danışmana önerilen adım */
-  suggestion?: string;
-};
+export type Signal = { level: "critical" | "warning" | "info"; text: string };
 
 export const THRESHOLDS = {
   missingLogDays: 3, // bu kadar gündür kayıt yoksa
@@ -547,17 +535,6 @@ export const THRESHOLDS = {
   lowCompletion: 50, // bu haftaki (bugüne kadarki) görev tamamlama % <
 };
 
-const dd = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
-/** Kayıtları "12.10: 4/5 · 13.10: 5/5" gibi tek satırlık kanıta çevirir (eskiden yeniye). */
-function evidenceLine(logs: DailyLog[], pick: (l: DailyLog) => string | null): string {
-  return [...logs]
-    .reverse()
-    .map((l) => `${dd(l.log_date)}: ${pick(l) ?? "—"}`)
-    .join(" · ");
-}
-const scale = (v: number | null) => (v == null ? null : `${v}/5`);
-const sleepTxt = (l: DailyLog) => (l.sleep_hours == null ? null : `${fmtNum(Number(l.sleep_hours))} sa`);
-
 export function computeSignals(opts: {
   logs: DailyLog[]; // herhangi bir sırada
   plan?: WeeklyPlan | null;
@@ -569,89 +546,25 @@ export function computeSignals(opts: {
   const T = THRESHOLDS;
 
   if (!logs.length) {
-    out.push({
-      level: "info",
-      text: "Son günlerde günlük takip girilmemiş",
-      suggestion: "Öğrenciye günlük formun akşam 1-2 dakika sürdüğünü hatırlatın; kayıt olmadan uyarı sistemi çalışamaz.",
-    });
+    out.push({ level: "info", text: "Son günlerde günlük takip girilmemiş" });
   } else {
     const gap = diffDays(logs[0].log_date, today);
-    if (gap >= T.missingLogDays)
-      out.push({
-        level: "warning",
-        text: `${gap} gündür günlük takip girilmedi`,
-        evidence: [`Son kayıt: ${formatTR(logs[0].log_date)} (${dayName(logs[0].log_date)})`],
-        suggestion: "Kayıt bırakma bazen zorlanmanın ilk işaretidir. Kısa bir mesajla nasıl olduğunu sorun; formu doldurmayı suçlamadan hatırlatın.",
-      });
+    if (gap >= T.missingLogDays) out.push({ level: "warning", text: `${gap} gündür günlük takip girilmedi` });
 
     const last3 = logs.slice(0, 3);
     const last7 = logs.slice(0, 7);
     const anx = avg(last3.map((l) => l.anxiety));
-    if (anx != null && anx >= T.highAnxiety) {
-      const sl = avg(last3.map((l) => (l.sleep_hours == null ? null : Number(l.sleep_hours))));
-      out.push({
-        level: "critical",
-        key: "anxiety",
-        text: `Kaygı yüksek (son kayıtlar ort. ${fmtNum(anx)})`,
-        evidence: [
-          `Kaygı: ${evidenceLine(last3, (l) => scale(l.anxiety))}`,
-          `Uyku: ${evidenceLine(last3, sleepTxt)}${sl != null && sl < 6 ? " (az uyku kaygıyı besliyor olabilir)" : ""}`,
-          ...last3.filter((l) => l.obstacle).slice(0, 2).map((l) => `${dd(l.log_date)} engel: “${(l.obstacle ?? "").slice(0, 120)}”`),
-        ],
-        suggestion: "Görüşmede kaygının hangi durumlarda yükseldiğini ve otomatik düşünceleri birlikte yazın. Uyku da düşükse önce uyku düzenini ele alın. Kaygı işlevselliği belirgin bozuyorsa uzmana yönlendirmeyi değerlendirin.",
-      });
-    }
+    if (anx != null && anx >= T.highAnxiety) out.push({ level: "critical", text: `Kaygı yüksek (son kayıtlar ort. ${fmtNum(anx)})` });
     const mot = avg(last3.map((l) => l.motivation));
-    if (mot != null && mot <= T.lowMotivation)
-      out.push({
-        level: "warning",
-        key: "motivation",
-        text: `Motivasyon düşük (ort. ${fmtNum(mot)})`,
-        evidence: [`Motivasyon: ${evidenceLine(last3, (l) => scale(l.motivation))}`, `Enerji: ${evidenceLine(last3, (l) => scale(l.energy))}`],
-        suggestion: "Hedefi küçültün: bir sonraki 2 gün için 'en kolay ilk görev' belirleyin. Motivasyonla birlikte enerji de düşükse uyku ve yorgunluğu sorun.",
-      });
+    if (mot != null && mot <= T.lowMotivation) out.push({ level: "warning", text: `Motivasyon düşük (ort. ${fmtNum(mot)})` });
     const en = avg(last3.map((l) => l.energy));
-    if (en != null && en <= T.lowEnergy)
-      out.push({
-        level: "warning",
-        key: "energy",
-        text: `Enerji düşük (ort. ${fmtNum(en)})`,
-        evidence: [`Enerji: ${evidenceLine(last3, (l) => scale(l.energy))}`, `Uyku: ${evidenceLine(last3, sleepTxt)}`],
-        suggestion: "Programdaki yeni konu yükünü birkaç gün tekrar ve soruya kaydırın; mola düzenini ve uykuyu konuşun.",
-      });
+    if (en != null && en <= T.lowEnergy) out.push({ level: "warning", text: `Enerji düşük (ort. ${fmtNum(en)})` });
     const sl = avg(last7.map((l) => (l.sleep_hours == null ? null : Number(l.sleep_hours))));
-    if (sl != null && sl < T.lowSleep)
-      out.push({
-        level: "warning",
-        key: "sleep_hours",
-        text: `Uyku az (ort. ${fmtNum(sl)} saat)`,
-        evidence: [`Uyku: ${evidenceLine(last7, sleepTxt)}`, `Aynı günlerde kaygı: ${evidenceLine(last7, (l) => scale(l.anxiety))}`],
-        suggestion: "Sabit kalkış saati ve yatmadan önce ekransız 1 saat hedefi koyun. Gece geç saate kalan çalışma blokları varsa programı öne çekin.",
-      });
+    if (sl != null && sl < T.lowSleep) out.push({ level: "warning", text: `Uyku az (ort. ${fmtNum(sl)} saat)` });
     const ph = avg(last7.map((l) => l.phone_minutes));
-    if (ph != null && ph > T.highPhone)
-      out.push({
-        level: "warning",
-        key: "phone_minutes",
-        text: `Telefon süresi yüksek (ort. ${fmtNum(ph, 0)} dk)`,
-        evidence: [
-          `Telefon: ${evidenceLine(last7, (l) => (l.phone_minutes == null ? null : `${l.phone_minutes} dk`))}`,
-          `Erteleme: ${evidenceLine(last7, (l) => (l.procrastinated == null ? null : l.procrastinated ? "evet" : "hayır"))}`,
-        ],
-        suggestion: `Haftalık hedefi birlikte belirleyin (ör. günde ${fmtNum(Math.max(60, Math.round((ph * 0.75) / 10) * 10), 0)} dk). Çalışma bloklarında telefonun başka odada kalmasını deneyin.`,
-      });
+    if (ph != null && ph > T.highPhone) out.push({ level: "warning", text: `Telefon süresi yüksek (ort. ${fmtNum(ph, 0)} dk)` });
     const pr = last7.filter((l) => l.procrastinated === true).length;
-    if (pr >= T.procrastinationDays)
-      out.push({
-        level: "warning",
-        key: "procrastinated",
-        text: `Son ${last7.length} kayıtta ${pr} gün erteleme`,
-        evidence: [
-          `Erteleme: ${evidenceLine(last7, (l) => (l.procrastinated == null ? null : l.procrastinated ? "evet" : "hayır"))}`,
-          ...last7.filter((l) => l.procrastinated && l.obstacle).slice(0, 2).map((l) => `${dd(l.log_date)} engel: “${(l.obstacle ?? "").slice(0, 120)}”`),
-        ],
-        suggestion: "Ertelenen görevin öncesindeki duyguyu konuşun (sıkılma, yetersizlik, belirsizlik). Görevi 5 dakikalık ilk adıma bölün ve başlama saatini sabitleyin.",
-      });
+    if (pr >= T.procrastinationDays) out.push({ level: "warning", text: `Son ${last7.length} kayıtta ${pr} gün erteleme` });
   }
 
   if (opts.plan && opts.tasks) {
@@ -661,25 +574,7 @@ export function computeSignals(opts: {
       if (due.length >= 3) {
         const done = due.filter((t) => t.done).length;
         const p = Math.round((done / due.length) * 100);
-        if (p < T.lowCompletion) {
-          const bySubject = new Map<string, { d: number; n: number }>();
-          for (const t of due) {
-            const e = bySubject.get(t.subject) ?? { d: 0, n: 0 };
-            e.n++;
-            if (t.done) e.d++;
-            bySubject.set(t.subject, e);
-          }
-          const worst = [...bySubject.entries()]
-            .sort((a, b) => a[1].d / a[1].n - b[1].d / b[1].n)
-            .slice(0, 3)
-            .map(([s, e]) => `${s}: ${e.d}/${e.n}`);
-          out.push({
-            level: "warning",
-            text: `Program tamamlama düşük (%${p})`,
-            evidence: [`Geçen ${elapsed} günde ${due.length} görevin ${done} tanesi tamamlandı`, `En çok geride kalan dersler: ${worst.join(" · ")}`],
-            suggestion: "Programın yükünü öğrenciyle birlikte gözden geçirin; gerçekçi olmayan bir plan ertelemeyi artırır. Kalan günler için görev sayısını azaltmayı düşünün.",
-          });
-        }
+        if (p < T.lowCompletion) out.push({ level: "warning", text: `Program tamamlama düşük (%${p})` });
       }
     }
   }

@@ -8,7 +8,7 @@ import { analyzeKarne, type KarneReport } from "./actions";
 import { accessToken, errorText, fetchAnalyses, sb, useRoute } from "./db";
 import { GeneratorModal } from "./plan";
 import { ALL_TOPICS } from "./curriculum";
-import { EXAM_SECTIONS, fmtNum, formatLong, formatTR, net, todayISO, type ExamAnalysis } from "./lib";
+import { EXAM_SECTIONS, fmtNum, formatLong, formatShort, formatTR, net, subjectForTopic, todayISO, type ExamAnalysis } from "./lib";
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Icon, IconButton, PageLoader, Segmented, Spinner, confirmAction, cx, useToast } from "./ui";
 
 type Draft = Omit<ExamAnalysis, "id" | "created_at" | "student_id"> & { id?: string };
@@ -247,6 +247,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
             />
           </div>
         </div>
+        <MistakeHistory analyses={list.filter((a) => kind === "ALL" || a.exam_type === kind)} />
         <ul className="space-y-3">
           {list.filter((a) => kind === "ALL" || a.exam_type === kind).map((a) => {
             const isLast = list.find((x) => x.exam_type === a.exam_type)?.id === a.id;
@@ -330,6 +331,68 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
 }
 
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
+
+/** Konu bazlı yanlış geçmişi: hangi konuda kaç denemede, hangi tarihlerde yanlış/boş yapıldı */
+function MistakeHistory({ analyses }: { analyses: ExamAnalysis[] }) {
+  const [all, setAll] = useState(false);
+  const rows = useMemo(() => {
+    const m = new Map<string, { topic_id: string; wrong: number; empty: number; hits: { date: string; w: number; e: number; type: string }[] }>();
+    for (const a of analyses) {
+      for (const r of a.results) {
+        const w = r.wrong ?? 0;
+        const e = r.empty ?? 0;
+        if (w + e === 0) continue;
+        const cur = m.get(r.topic_id) ?? { topic_id: r.topic_id, wrong: 0, empty: 0, hits: [] };
+        cur.wrong += w;
+        cur.empty += e;
+        cur.hits.push({ date: a.exam_date, w, e, type: a.exam_type });
+        m.set(r.topic_id, cur);
+      }
+    }
+    return [...m.values()]
+      .map((x) => ({ ...x, hits: x.hits.sort((p, q) => q.date.localeCompare(p.date)) }))
+      .sort((p, q) => q.hits.length - p.hits.length || q.wrong + q.empty - (p.wrong + p.empty));
+  }, [analyses]);
+  if (analyses.length < 1 || rows.length === 0) return null;
+  const shown = all ? rows : rows.slice(0, 8);
+  const chronic = rows.filter((r) => r.hits.length >= 3).length;
+  return (
+    <Card
+      title="Konu bazlı yanlış geçmişi"
+      subtitle={`${analyses.length} denemede ${rows.length} konuda yanlış/boş${chronic ? ` · ${chronic} konu 3+ denemede tekrar ediyor` : ""}. Tekrar eden eksikler otomatik programda öne alınır.`}
+    >
+      <ul className="-mx-1 divide-y divide-line">
+        {shown.map((r) => (
+          <li key={r.topic_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 py-2.5">
+            <div className="min-w-0 flex-1 basis-48">
+              <p className="truncate text-sm font-semibold">{topicName.get(r.topic_id) ?? r.topic_id}</p>
+              <p className="text-xs text-muted">
+                {subjectForTopic(r.topic_id)} · toplam {r.wrong} yanlış{r.empty ? `, ${r.empty} boş` : ""}
+              </p>
+            </div>
+            <Badge tone={r.hits.length >= 3 ? "danger" : r.hits.length === 2 ? "warning" : "neutral"}>
+              {r.hits.length} / {analyses.length} deneme
+            </Badge>
+            <div className="flex w-full flex-wrap gap-1 sm:w-auto">
+              {r.hits.map((h, i) => (
+                <span key={i} className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted tabular" title={h.type}>
+                  {formatShort(h.date)} · {h.w ? `${h.w}Y` : ""}
+                  {h.w && h.e ? " " : ""}
+                  {h.e ? `${h.e}B` : ""}
+                </span>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {rows.length > 8 && (
+        <button className="mt-2 text-sm font-medium text-primary" onClick={() => setAll((x) => !x)}>
+          {all ? "Daha az göster" : `Tüm konular (${rows.length})`}
+        </button>
+      )}
+    </Card>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: string; initial: Draft; onCancel: () => void; onSaved: () => void }) {

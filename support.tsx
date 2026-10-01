@@ -1,12 +1,12 @@
 "use client";
 // Destek / risk yönlendirmesi.
-// Öğrenci: "Konuşmak istiyorum" butonu ve (otomatik uyarı olduğunda) nazik destek kartı.
+// Öğrenci: "Danışmanıma not bırak" butonu ve (otomatik uyarı olduğunda) nazik destek kartı.
 // Danışman: "Destek gerekenler" listesi ve öğrenci bazında tarihli takip kaydı.
-// Bu bir kriz müdahale aracı değildir; danışman mesajları uygulamayı açtığında görür.
+// Bu bir kriz müdahale aracı değildir; notlar danışman uygulamayı açtığında görülür.
 
 import { useCallback, useEffect, useState } from "react";
 import { A, errorText, sb } from "./db";
-import { SUPPORT_ACTIONS, relativeDay, type SupportAction, type SupportActionKind, type SupportAlert, type SupportDetail } from "./lib";
+import { SUPPORT_ACTIONS, relativeDay, type SupportAction, type SupportActionKind, type SupportAlert } from "./lib";
 import { Badge, Button, Card, ErrorBox, Icon, Modal, cx, useToast } from "./ui";
 
 const when = (iso: string) => {
@@ -18,10 +18,10 @@ const when = (iso: string) => {
 /* Öğrenci tarafı                                                      */
 /* ================================================================== */
 
-function EmergencyNote() {
+function SeenNote() {
   return (
     <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">
-      Danışmanın bu mesajı uygulamayı açtığında görür, hemen göremeyebilir. Beklemeden konuşmak istersen yanındaki güvendiğin bir yetişkine (ailen, öğretmenin) haber ver.
+      Danışmanın notunu uygulamayı açtığında görür. Hemen konuşman gerekirse yanındaki güvendiğin bir yetişkine (ailen, öğretmenin) söylemekten çekinme.
     </p>
   );
 }
@@ -46,7 +46,7 @@ export function SupportModal({ onClose, onSent }: { onClose: () => void; onSent?
     <Modal
       open
       onClose={onClose}
-      title={sent ? "Danışmanına iletildi" : "Danışmanınla konuşmak istiyorum"}
+      title={sent ? "Notun danışmanına iletildi" : "Danışmanına not bırak"}
       footer={
         sent ? (
           <Button onClick={onClose}>Tamam</Button>
@@ -56,7 +56,7 @@ export function SupportModal({ onClose, onSent }: { onClose: () => void; onSent?
               Vazgeç
             </Button>
             <Button icon="heart" onClick={send} loading={busy}>
-              Danışmanıma ilet
+              Notu gönder
             </Button>
           </>
         )
@@ -65,16 +65,17 @@ export function SupportModal({ onClose, onSent }: { onClose: () => void; onSent?
       <div className="space-y-4">
         {sent ? (
           <p className="text-[15px] leading-relaxed">
-            Bunu paylaştığın için teşekkürler. Danışmanın mesajını görünce seninle iletişime geçecek. Bu arada kendine nazik davran; bugünkü programı
-            yapamasan da sorun değil.
+            Paylaştığın için teşekkürler. Danışmanın notunu görünce seninle iletişime geçecek; yanıtı uygulamada “Danışmanından notlar” bölümünde de
+            görebilirsin. Bu arada kendine nazik davran; bugünkü programı yapamasan da sorun değil.
           </p>
         ) : (
           <>
             <p className="text-[15px] leading-relaxed">
-              Zor bir dönemden geçiyor olabilirsin ve bunu fark edip paylaşman çok değerli. İstersen ne yaşadığını kısaca yazabilirsin; yazmak zorunda değilsin.
+              Zor bir dönemden geçiyor olabilirsin; bunu fark edip paylaşman çok değerli. Danışmanına ne yaşadığını, nasıl hissettiğini ya da ne zaman
+              konuşmak istediğini yazabilirsin.
             </p>
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Danışmanına not (isteğe bağlı)</span>
+              <span className="mb-1.5 block text-sm font-medium">Notun</span>
               <textarea
                 className="field min-h-24"
                 maxLength={1000}
@@ -85,23 +86,22 @@ export function SupportModal({ onClose, onSent }: { onClose: () => void; onSent?
             </label>
           </>
         )}
-        <EmergencyNote />
+        <SeenNote />
         {error && <ErrorBox>{error}</ErrorBox>}
       </div>
     </Modal>
   );
 }
 
-/** Öğrencinin Bugün ekranı: otomatik uyarı varsa destek kartı, her zaman "konuşmak istiyorum" bağlantısı */
+/** Öğrencinin Bugün ekranı: otomatik uyarı varsa destek kartı, her zaman "not bırak" bağlantısı */
 export function StudentSupport({ variant }: { variant: "card" | "link" }) {
   const toast = useToast();
-  const [state, setState] = useState<{ show: boolean; details?: string[]; requested_at: string | null } | null>(null);
-  const [more, setMore] = useState(false);
+  const [state, setState] = useState<{ show: boolean; requested_at: string | null } | null>(null);
   const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await sb().rpc("support_prompt");
-    if (!error && data) setState(data as { show: boolean; details?: string[]; requested_at: string | null });
+    if (!error && data) setState(data as { show: boolean; requested_at: string | null });
   }, []);
   useEffect(() => {
     load();
@@ -125,26 +125,10 @@ export function StudentSupport({ variant }: { variant: "card" | "link" }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Son günlerde zorlanıyor gibisin</p>
-              <p className="mt-0.5 text-sm text-muted">Günlük takibindeki cevaplar biraz yorgun ve kaygılı olduğunu gösteriyor. Danışmanınla konuşmak ister misin?</p>
-              {!!state.details?.length && (
-                <div className="mt-2">
-                  <button type="button" className="text-sm font-medium text-primary hover:underline" aria-expanded={more} onClick={() => setMore((m) => !m)}>
-                    {more ? "Ayrıntıyı gizle" : "Bunu neden görüyorum?"}
-                  </button>
-                  {more && (
-                    <ul className="mt-2 space-y-2 text-sm">
-                      {state.details.map((d) => (
-                        <li key={d} className="rounded-lg bg-surface p-2.5">
-                          {d}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
+              <p className="mt-0.5 text-sm text-muted">Günlük takibindeki cevaplar biraz yorgun ve kaygılı olduğunu gösteriyor. İstersen danışmanına bir not bırakabilirsin.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" icon="heart" onClick={() => setOpen(true)}>
-                  Konuşmak istiyorum
+                  Danışmanıma not bırak
                 </Button>
                 <Button size="sm" variant="ghost" onClick={dismiss}>
                   Şimdilik iyiyim
@@ -157,7 +141,7 @@ export function StudentSupport({ variant }: { variant: "card" | "link" }) {
 
       {variant === "card" && recentRequest && !state?.show && (
         <p className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm text-muted">
-          <Icon name="check" size={16} className="text-success" /> Konuşma isteğin danışmanına iletildi ({relativeDay(state!.requested_at!.slice(0, 10))}).
+          <Icon name="check" size={16} className="text-success" /> Notun danışmanına iletildi ({relativeDay(state!.requested_at!.slice(0, 10))}).
         </p>
       )}
 
@@ -170,7 +154,7 @@ export function StudentSupport({ variant }: { variant: "card" | "link" }) {
         <Icon name="lifebuoy" size={20} className="shrink-0 text-primary" />
         <span className="flex-1">
           <span className="block font-medium text-fg">Zor bir gün mü?</span>
-          Danışmanınla konuşmak istediğini ona bildir.
+          Danışmanına not bırak.
         </span>
         <Icon name="chevronRight" size={18} />
       </button>
@@ -239,11 +223,11 @@ export function SupportInbox({ names }: { names: Map<string, string> }) {
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
                   {names.get(a.student_id) ?? "Öğrenci"}
-                  <Badge tone={a.source === "student" ? "danger" : "warning"}>{a.source === "student" ? "Konuşmak istiyor" : "Otomatik"}</Badge>
+                  <Badge tone={a.source === "student" ? "danger" : "warning"}>{a.source === "student" ? "Not bıraktı" : "Otomatik"}</Badge>
                   <span className="text-xs font-normal text-muted">{STATUS_LABEL[a.status]}</span>
                 </span>
                 <span className="block truncate text-xs text-muted">
-                  {a.student_note ? `“${a.student_note}”` : (a.details?.length ? a.details.map((d) => d.title) : a.reasons).join(" · ")} · {when(a.created_at)}
+                  {a.student_note ? `“${a.student_note}”` : a.reasons.join(" · ")} · {when(a.created_at)}
                 </span>
               </span>
               <Icon name="chevronRight" size={18} className="text-faint" />
@@ -252,40 +236,6 @@ export function SupportInbox({ names }: { names: Map<string, string> }) {
         ))}
       </ul>
     </Card>
-  );
-}
-
-/** Otomatik uyarının ayrıntıları: kanıt, neden önemli, önerilen adım */
-function AlertDetails({ details }: { details: SupportDetail[] }) {
-  return (
-    <div className="mt-2 space-y-2">
-      {details.map((d) => (
-        <div key={d.title} className="rounded-lg bg-surface p-3 text-sm">
-          <p className="font-semibold">{d.title}</p>
-          {!!d.evidence?.length && (
-            <ul className="mt-1.5 space-y-0.5 text-fg">
-              {d.evidence.map((e) => (
-                <li key={e} className="tabular">
-                  {e}
-                </li>
-              ))}
-            </ul>
-          )}
-          {d.why && (
-            <p className="mt-1.5 text-muted">
-              <span className="font-semibold text-fg">Neden önemli? </span>
-              {d.why}
-            </p>
-          )}
-          {d.next_step && (
-            <p className="mt-1.5 rounded-md bg-primary-soft px-2.5 py-1.5 text-primary-ink">
-              <span className="font-semibold">Önerilen adım: </span>
-              {d.next_step}
-            </p>
-          )}
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -351,6 +301,26 @@ export function SupportPanel({ studentId }: { studentId: string }) {
     }
   }
 
+  async function reply(a: SupportAlert) {
+    const body = (draft[a.id] ?? "").trim();
+    if (!body) return toast.show("Önce öğrenciye yazacağın notu yaz", "danger");
+    setBusy(a.id + "reply");
+    setError(null);
+    try {
+      const { error } = await sb().from("shared_notes").insert({ student_id: studentId, body, alert_id: a.id });
+      if (error) throw error;
+      await sb().from("support_actions").insert({ alert_id: a.id, student_id: studentId, action: "note", note: `Öğrenciye gönderildi: ${body}` });
+      if (a.status === "open") await sb().from("support_alerts").update({ status: "seen" }).eq("id", a.id);
+      setDraft((d) => ({ ...d, [a.id]: "" }));
+      toast.show("Not öğrenciye gönderildi");
+      await load();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (missing || !alerts) return null;
   const open = alerts.filter((a) => a.status !== "closed");
   const closed = alerts.filter((a) => a.status === "closed");
@@ -362,21 +332,17 @@ export function SupportPanel({ studentId }: { studentId: string }) {
     return (
       <div key={a.id} className={cx("rounded-xl border p-3", isOpen ? "border-danger/30 bg-danger-soft/40" : "border-line")}>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge tone={a.source === "student" ? "danger" : "warning"}>{a.source === "student" ? "Öğrenci konuşmak istedi" : "Otomatik uyarı"}</Badge>
+          <Badge tone={a.source === "student" ? "danger" : "warning"}>{a.source === "student" ? "Öğrenci not bıraktı" : "Otomatik uyarı"}</Badge>
           <Badge>{STATUS_LABEL[a.status]}</Badge>
           <span className="text-xs text-muted">{when(a.created_at)}</span>
         </div>
         {a.student_note && <p className="mt-2 rounded-lg bg-surface p-2 text-sm">“{a.student_note}”</p>}
-        {a.details?.length ? (
-          <AlertDetails details={a.details} />
-        ) : (
-          a.source === "auto" && (
-            <ul className="mt-2 list-disc pl-5 text-sm text-fg">
-              {a.reasons.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          )
+        {a.source === "auto" && (
+          <ul className="mt-2 list-disc pl-5 text-sm text-fg">
+            {a.reasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
         )}
         {a.source === "auto" && a.student_dismissed_at && <p className="mt-1 text-xs text-muted">Öğrenci destek kartını “Şimdilik iyiyim” ile kapattı ({when(a.student_dismissed_at)}).</p>}
 
@@ -397,12 +363,15 @@ export function SupportPanel({ studentId }: { studentId: string }) {
             <textarea
               className="field min-h-16 text-sm"
               maxLength={2000}
-              placeholder="Not (isteğe bağlı): ne konuşuldu, hangi adım atıldı…"
+              placeholder="Öğrenciye yazacağın not (Öğrenciye gönder) veya kendi takip notun (diğer butonlar)…"
               value={draft[a.id] ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, [a.id]: e.target.value }))}
               aria-label="Takip notu"
             />
             <div className="flex flex-wrap gap-1.5">
+              <Button size="sm" icon="note" loading={busy === a.id + "reply"} onClick={() => reply(a)}>
+                Öğrenciye gönder
+              </Button>
               {SUPPORT_ACTIONS.map((s) => (
                 <Button
                   key={s.value}
@@ -440,7 +409,7 @@ export function SupportPanel({ studentId }: { studentId: string }) {
         )}
         {showClosed && closed.map(renderAlert)}
         {error && <ErrorBox>{error}</ErrorBox>}
-        <p className="text-xs text-muted">Uyarıları yalnızca öğrencinin danışmanı görür. Öğrenci yalnızca kendi kayıtlarından çıkan kısa açıklamayı görür; önerilen adımları ve bu notları göremez.</p>
+        <p className="text-xs text-muted">Uyarıları yalnızca öğrencinin danışmanı görür; öğrenci uyarı nedenlerini ve bu notları göremez.</p>
       </div>
     </Card>
   );

@@ -14,6 +14,7 @@ import {
   addDays,
   categoryOfSection,
   categoryOfSubject,
+  emptySchedule,
   dayName,
   dayShort,
   diffDays,
@@ -39,8 +40,8 @@ import {
   type TopicProgress,
   type WeeklyPlan,
 } from "./lib";
-import { CopyDaysModal } from "./ekler";
-import { buildTimedPlan, type DraftTask, type HistoryTask } from "./planner";
+import { buildCandidates, buildTimedPlan, type Candidate, type DraftTask, type HistoryTask } from "./planner";
+import { CalendarView } from "./calendar";
 import {
   Badge,
   Button,
@@ -129,7 +130,7 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
   const [tasks, setTasks] = useState<PlanTask[]>([]);
   const [days, setDays] = useState<PlanDay[]>([]);
   const [day, setDay] = useState(0);
-  const [view, setView] = useState<"tablo" | "gun">("gun");
+  const [view, setView] = useState<"takvim" | "tablo" | "gun">("gun");
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<PlanTask> | null>(null);
@@ -137,7 +138,7 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
   const [genOpen, setGenOpen] = useState(false);
 
   useEffect(() => {
-    if (window.innerWidth >= 900) setView("tablo");
+    if (window.innerWidth >= 900) setView("takvim");
   }, []);
 
   const plan = useMemo(() => plans?.find((p) => p.id === planId) ?? null, [plans, planId]);
@@ -247,6 +248,18 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
     replace(data as PlanTask);
   }
 
+  async function moveTask(t: PlanTask, dayIndex: number, time: string) {
+    if (t.day_index === dayIndex && t.start_time === time) return;
+    const before = t;
+    setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, day_index: dayIndex, start_time: time, duration_min: x.duration_min ?? 40 } : x)));
+    try {
+      replace(await patchTask(t.id, { day_index: dayIndex, start_time: time, duration_min: t.duration_min ?? 40 }));
+    } catch (e) {
+      replace(before);
+      toast.show(errorText(e), "danger");
+    }
+  }
+
   async function removeTask(id: string) {
     const { error } = await sb().from("plan_tasks").delete().eq("id", id);
     if (error) throw error;
@@ -294,13 +307,14 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
           Boş hafta / kopyala
         </Button>
         {plan && (
-          <div className="ml-auto w-44">
+          <div className="ml-auto w-64">
             <Segmented
               size="sm"
               value={view}
               onChange={setView}
               ariaLabel="Görünüm"
               options={[
+                { value: "takvim", label: "Takvim" },
                 { value: "tablo", label: "Tablo" },
                 { value: "gun", label: "Gün" },
               ]}
@@ -342,6 +356,15 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
 
           {loadingDetail ? (
             <PageLoader />
+          ) : view === "takvim" ? (
+            <CalendarView
+              plan={plan}
+              tasks={real}
+              onToggle={toggle}
+              onEdit={(t) => setEditing(t)}
+              onAdd={(d, time) => setEditing({ day_index: d, subject: "TÜRKÇE", task_type: "soru", start_time: time, duration_min: time ? 40 : null })}
+              onMove={moveTask}
+            />
           ) : view === "tablo" ? (
             <WeekGrid
               plan={plan}
@@ -379,6 +402,8 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
       {editing && plan && (
         <TaskEditor
           plan={plan}
+          studentId={studentId}
+          weekTopics={real.map((t) => t.topic_id).filter((x): x is string => Boolean(x))}
           task={editing}
           onClose={() => setEditing(null)}
           onSave={async (t) => {
@@ -417,7 +442,7 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
           onClose={() => setGenOpen(false)}
           onCreated={(id) => {
             setGenOpen(false);
-            setView(window.innerWidth >= 900 ? "tablo" : "gun");
+            setView(window.innerWidth >= 900 ? "takvim" : "gun");
             loadPlans(id).then(() => reloadDetail(id));
           }}
         />
@@ -860,12 +885,16 @@ export function TaskRow({
 /* ================================================================== */
 function TaskEditor({
   plan,
+  studentId,
+  weekTopics,
   task,
   onClose,
   onSave,
   onDelete,
 }: {
   plan: WeeklyPlan;
+  studentId: string;
+  weekTopics: string[];
   task: Partial<PlanTask>;
   onClose: () => void;
   onSave: (t: Partial<PlanTask>) => Promise<void>;
@@ -880,6 +909,35 @@ function TaskEditor({
   const subjects = [...DEFAULT_SUBJECTS, ...EXTRA_SUBJECT_SUGGESTIONS, ...Object.keys(SUBJECT_SECTIONS)];
   const subjectOptions = [...subjects, subject].filter((s, i, a) => a.indexOf(s) === i);
   const num = (v: string) => (v.trim() === "" ? null : Math.min(2000, Math.max(0, Math.round(Number(v.replace(/[^\d]/g, "")) || 0))));
+  const [sugs, setSugs] = useState<Candidate[] | null>(null);
+  const [sugBusy, setSugBusy] = useState(false);
+
+  /** Aynı dersten öncelikli (deneme yanlışı, kronik eksik, sıradaki konu…) başka konular önerir */
+  async function suggest() {
+    setSugBusy(true);
+    try {
+      const [progress, analyses] = await Promise.all([fetchTopicProgress(studentId), fetchAnalyses(studentId)]);
+      const list = buildCandidates({
+        start: plan.start_date,
+        schedule: emptySchedule(studentId),
+        sections,
+        tyt: analyses.find((a) => a.exam_type === "TYT") ?? null,
+        ayt: analyses.find((a) => a.exam_type === "AYT") ?? null,
+        progress,
+        history: [],
+        tytShare: 50,
+        routines: { paragraf: false, problem: false },
+        carryOver: false,
+        excluded: [...weekTopics, t.topic_id ?? ""].filter(Boolean),
+        allAnalyses: analyses,
+      });
+      setSugs(list.slice(0, 4));
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setSugBusy(false);
+    }
+  }
 
   async function save() {
     setError(null);
@@ -1009,6 +1067,27 @@ function TaskEditor({
                   </optgroup>
                 ))}
             </select>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Button size="sm" variant="soft" icon="target" onClick={suggest} loading={sugBusy}>
+                Başka konu öner
+              </Button>
+              {sugs?.length === 0 && <span className="text-xs text-muted">Bu derste öneri yok.</span>}
+              {sugs?.map((c) => (
+                <button
+                  key={c.topic_id}
+                  type="button"
+                  onClick={() => {
+                    set({ topic_id: c.topic_id, task_type: c.mode === "konu" ? "konu" : t.task_type === "konu" ? "soru" : t.task_type });
+                    setSugs(null);
+                  }}
+                  className="rounded-lg border border-line bg-surface px-2.5 py-1 text-left text-xs hover:border-primary hover:bg-primary-soft"
+                  title={c.reasons.join(" · ")}
+                >
+                  <span className="font-semibold">{c.name}</span>
+                  <span className="block text-[11px] text-muted">{c.reasons[0] ?? ""}</span>
+                </button>
+              ))}
+            </div>
           </Field>
         )}
         <Field label="Hedef soru sayısı" htmlFor="te-target">
@@ -1038,8 +1117,9 @@ function TaskEditor({
             placeholder="ör. 3D yayınları test 4-6, video: …"
           />
         </Field>
-        <div className="rounded-xl bg-surface-2 p-3">
-          <label className="flex items-center gap-2 text-sm font-medium">
+        <details className="rounded-xl bg-surface-2 p-3" open={Boolean(t.done || t.solved)}>
+          <summary className="cursor-pointer text-sm font-medium text-muted">Öğrenci sonucu (tamamlandı, çözülen, doğru, yanlış)</summary>
+          <label className="mt-3 flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" className="h-5 w-5" checked={Boolean(t.done)} onChange={(e) => set({ done: e.target.checked })} />
             Tamamlandı
           </label>
@@ -1056,7 +1136,7 @@ function TaskEditor({
               </Field>
             ))}
           </div>
-        </div>
+        </details>
         {error && <ErrorBox>{error}</ErrorBox>}
       </div>
     </Modal>
@@ -1171,8 +1251,52 @@ export function GeneratorModal({
       carryOver,
       excluded,
       pattern: pattern.split("-").map(Number) as [number, number],
+      allAnalyses: data.analyses,
     });
   }, [data, start, sections, tytId, aytId, tytShare, routines, carryOver, excluded, pattern]);
+
+  // Önizlemede elle yapılan değişiklikler: blok → başka konu / kaldırıldı
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [cycle, setCycle] = useState<Record<string, number>>({});
+  useEffect(() => {
+    setOverrides({});
+    setRemoved([]);
+    setCycle({});
+  }, [result]);
+  const keyOf = (b: { day_index: number; sort: number }) => `${b.day_index}-${b.sort}`;
+  const finalBlocks = useMemo(() => {
+    if (!result) return [];
+    return result.blocks
+      .filter((b) => !removed.includes(keyOf(b)))
+      .map((b) => {
+        const tid = overrides[keyOf(b)];
+        const c = tid ? result.pool.find((x) => x.topic_id === tid) : null;
+        if (!c) return b;
+        const type: TaskType = c.mode === "konu" ? "konu" : b.task_type === "konu" ? "soru" : b.task_type;
+        const q = Math.max(5, Math.round(((b.duration_min ?? 40) * (c.category === "sayisal" ? 0.6 : 0.8)) / 5) * 5);
+        return { ...b, topic_id: c.topic_id, subject: c.subject, category: c.category, task_type: type, target_questions: type === "konu" ? null : (b.target_questions ?? q), content: type === "konu" ? "Konu çalışması + örnek sorular" : b.content };
+      });
+  }, [result, overrides, removed]);
+  function swap(b: (typeof finalBlocks)[number]) {
+    if (!result) return;
+    const k = keyOf(b);
+    const sameDay = new Set(finalBlocks.filter((x) => x.day_index === b.day_index).map((x) => x.topic_id));
+    const opts = result.pool.filter(
+      (c) => c.category === b.category && (!b.exam || c.exam === b.exam || c.exam === "BOTH") && c.topic_id !== b.topic_id && !sameDay.has(c.topic_id),
+    );
+    if (!opts.length) return toast.show("Bu blok için başka uygun konu yok", "danger");
+    const i = cycle[k] ?? 0;
+    setOverrides((o) => ({ ...o, [k]: opts[i % opts.length].topic_id }));
+    setCycle((c) => ({ ...c, [k]: i + 1 }));
+  }
+  const finalTasks: DraftTask[] = finalBlocks.map(({ category: _c, exam: _e, routine: _r, ...t }) => t);
+  const usedList = useMemo(() => {
+    if (!result) return [];
+    const cnt = new Map<string, number>();
+    for (const b of finalBlocks) if (b.topic_id) cnt.set(b.topic_id, (cnt.get(b.topic_id) ?? 0) + 1);
+    return result.pool.filter((c) => cnt.has(c.topic_id)).map((c) => ({ ...c, uses: cnt.get(c.topic_id) ?? 0 }));
+  }, [result, finalBlocks]);
 
   const scheduleEmpty = data ? data.schedule.slots.every((r) => rangeMinutes(r) === 0) : false;
   const hasAyt = sections.some((s) => ALL_SECTIONS.find((x) => x.id === s)?.exam === "AYT");
@@ -1181,7 +1305,7 @@ export function GeneratorModal({
     if (!data || !result) return;
     setError(null);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return setError("Geçerli bir başlangıç tarihi seçin.");
-    if (!result.tasks.length) return setError("Oluşturulacak blok yok. Çalışma saatlerini ve ders seçimini kontrol edin.");
+    if (!finalTasks.length) return setError("Oluşturulacak blok yok. Çalışma saatlerini ve ders seçimini kontrol edin.");
     setBusy(true);
     try {
       const minutes = result.dayMinutes;
@@ -1210,7 +1334,7 @@ export function GeneratorModal({
         if (error) throw error;
         plan = row as WeeklyPlan;
       }
-      const rows = result.tasks.map((t: DraftTask) => ({ ...t, plan_id: (plan as WeeklyPlan).id, student_id: studentId, done: false }));
+      const rows = finalTasks.map((t: DraftTask) => ({ ...t, plan_id: (plan as WeeklyPlan).id, student_id: studentId, done: false }));
       const { error: e2 } = await sb().from("plan_tasks").insert(rows);
       if (e2) throw e2;
       toast.show(`${rows.length} blokluk program oluşturuldu`);
@@ -1234,8 +1358,8 @@ export function GeneratorModal({
           <Button variant="ghost" onClick={onClose}>
             Vazgeç
           </Button>
-          <Button icon="check" onClick={create} loading={busy} disabled={!result || scheduleEmpty || !result.tasks.length}>
-            Programı oluştur{result ? ` (${result.tasks.length} blok)` : ""}
+          <Button icon="check" onClick={create} loading={busy} disabled={!result || scheduleEmpty || !finalTasks.length}>
+            Programı oluştur{result ? ` (${finalTasks.length} blok)` : ""}
           </Button>
         </>
       }
@@ -1291,6 +1415,19 @@ export function GeneratorModal({
             })}
           </div>
 
+          <details className="group rounded-xl border border-line">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm">
+              <span>
+                <span className="font-medium">Gelişmiş ayarlar</span>
+                <span className="block text-xs text-muted">
+                  {sections.length} ders · {hasAyt ? (tytShare === 100 ? "yalnız TYT" : `TYT %${tytShare}`) : "yalnız TYT"} · {pattern === "1-1" ? "1 sayısal · 1 sözel" : pattern === "2-1" ? "2 sayısal · 1 sözel" : "1 sayısal · 2 sözel"}
+                  {routines.paragraf ? " · paragraf" : ""}
+                  {routines.problem ? " · problem" : ""}
+                </span>
+              </span>
+              <Icon name="chevronDown" size={18} className="shrink-0 text-muted transition group-open:rotate-180" />
+            </summary>
+            <div className="space-y-5 border-t border-line p-3">
           <div>
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-sm font-medium">
@@ -1376,16 +1513,19 @@ export function GeneratorModal({
             </div>
           </div>
 
+            </div>
+          </details>
+
           <div>
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-sm font-medium">Önizleme</p>
+              <p className="text-sm font-medium">Önizleme <span className="font-normal text-muted">· beğenmediğin bloğu “Değiştir” ile başka konuya çevir</span></p>
               <p className="text-xs text-muted tabular">
                 {result.stats.sayisal} sayısal · {result.stats.sozel} sözel · TYT {result.stats.tyt} / AYT {result.stats.ayt} blok · ~{fmtNum(result.stats.questions, 0)} soru
               </p>
             </div>
             <div className="max-h-80 space-y-2 overflow-y-auto rounded-xl border border-line p-2">
               {dates.map((d, i) => {
-                const list = result.blocks.filter((b) => b.day_index === i);
+                const list = finalBlocks.filter((b) => b.day_index === i);
                 return (
                   <div key={d}>
                     <p className="px-1 text-xs font-semibold text-muted">
@@ -1406,6 +1546,24 @@ export function GeneratorModal({
                           <span className="min-w-0 flex-1 truncate">{b.topic_id ? (topicName.get(b.topic_id) ?? b.topic_id) : b.content}</span>
                           <span className={cx("rounded px-1 text-[9px] font-bold uppercase", TYPE_TONE[b.task_type])}>{typeShort(b.task_type)}</span>
                           <span className="w-8 shrink-0 text-right tabular text-muted">{b.target_questions ?? ""}</span>
+                          {!b.routine && (
+                            <button
+                              type="button"
+                              onClick={() => swap(b)}
+                              className="rounded px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary-soft"
+                              title="Bu bloğa başka konu koy"
+                            >
+                              Değiştir
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setRemoved((r) => [...r, keyOf(b)])}
+                            aria-label="Bloğu kaldır"
+                            className="flex h-6 w-6 items-center justify-center rounded text-faint hover:bg-danger-soft hover:text-danger"
+                          >
+                            <Icon name="x" size={13} />
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -1417,11 +1575,11 @@ export function GeneratorModal({
 
           <div>
             <p className="mb-2 text-sm font-medium">Bu hafta çalışılacak konular</p>
-            {result.candidates.length === 0 ? (
+            {usedList.length === 0 ? (
               <p className="rounded-xl bg-surface-2 p-3 text-sm text-muted">Konu bulunamadı. Ders seçimini veya deneme analizini kontrol et.</p>
             ) : (
               <ul className="divide-y divide-line rounded-xl border border-line">
-                {result.candidates.map((c) => (
+                {usedList.map((c) => (
                   <li key={c.topic_id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
                     <span className={cx("h-2 w-2 shrink-0 rounded-full", c.category === "sayisal" ? "bg-say" : "bg-soz")} />
                     <div className="min-w-0 flex-1">
@@ -1590,7 +1748,6 @@ function DayDetails({
   const [minutes, setMinutes] = useState<string>(current?.study_minutes != null ? String(current.study_minutes) : "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [copyOpen, setCopyOpen] = useState(false);
 
   const blockMinutes = blocks.reduce((s, b) => {
     const a = timeToMinutes(b.start);
@@ -1729,11 +1886,6 @@ function DayDetails({
           >
             Aralık ekle
           </Button>
-          {blocks.some((b) => b.start && b.end) && (
-            <Button variant="ghost" size="sm" icon="copy" onClick={() => setCopyOpen(true)}>
-              Bu saatleri diğer günlere kopyala
-            </Button>
-          )}
         </div>
 
         <Field label="Notlar" htmlFor={`notes-${dayIndex}`}>
@@ -1749,36 +1901,6 @@ function DayDetails({
             placeholder="Günün notları…"
           />
         </Field>
-
-        {copyOpen && (
-          <CopyDaysModal
-            source={dayIndex}
-            labels={Array.from({ length: 7 }, (_, i) => dayName(addDays(plan.start_date, i)))}
-            weekdayIdx={Array.from({ length: 7 }, (_, i) => i).filter((i) => {
-              const w = parseISODate(addDays(plan.start_date, i)).getDay();
-              return w >= 1 && w <= 5;
-            })}
-            weekendIdx={Array.from({ length: 7 }, (_, i) => i).filter((i) => {
-              const w = parseISODate(addDays(plan.start_date, i)).getDay();
-              return w === 0 || w === 6;
-            })}
-            onClose={() => setCopyOpen(false)}
-            onApply={async (targets) => {
-              const clean = blocks.filter((b) => b.start && b.end).map((b) => ({ start: b.start, end: b.end, label: b.label.trim().slice(0, 120) }));
-              const { data, error } = await sb()
-                .from("plan_days")
-                .upsert(
-                  targets.map((t) => ({ plan_id: plan.id, day_index: t, student_id: studentId, time_blocks: clean })),
-                  { onConflict: "plan_id,day_index" },
-                )
-                .select("*");
-              if (error) return toast.show(errorText(error), "danger");
-              for (const d of (data ?? []) as PlanDay[]) onSaved(d);
-              toast.show(`Saatler ${targets.length} güne kopyalandı`);
-              setCopyOpen(false);
-            }}
-          />
-        )}
 
         <div className="flex items-center justify-end gap-3">
           {dirty && <span className="text-xs text-warning">Kaydedilmemiş değişiklik var</span>}

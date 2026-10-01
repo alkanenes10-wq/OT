@@ -7,8 +7,7 @@ import { errorText, fetchPlans, fetchSchedule, sb, useRoute } from "./db";
 import { WEEKDAYS, minutesToText, rangeMinutes, timeToMinutes, type StudySchedule, type TimeRange, type WeeklyPlan } from "./lib";
 import { GeneratorModal } from "./plan";
 import { sliceDay } from "./planner";
-import { CopyDaysModal } from "./ekler";
-import { Button, Card, ErrorBox, Icon, IconButton, PageLoader, Segmented, cx, useToast } from "./ui";
+import { Button, Card, ErrorBox, IconButton, PageLoader, Segmented, cx, useToast } from "./ui";
 
 const PRESETS: { label: string; r: TimeRange }[] = [
   { label: "Okul sonrası 17:00–19:30", r: { s: "17:00", e: "19:30" } },
@@ -47,7 +46,6 @@ export function ScheduleSection({ studentId, editable }: { studentId: string; ed
   const [busy, setBusy] = useState(false);
   const [plans, setPlans] = useState<WeeklyPlan[] | null>(null);
   const [genOpen, setGenOpen] = useState(false);
-  const [copyFrom, setCopyFrom] = useState<number | null>(null);
 
   useEffect(() => {
     fetchSchedule(studentId)
@@ -111,16 +109,11 @@ export function ScheduleSection({ studentId, editable }: { studentId: string; ed
             const blocks = blockCount(ranges, draft);
             return (
               <div key={d} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start">
-                <div className="flex w-full items-center justify-between gap-2 sm:w-32 sm:flex-col sm:items-start sm:pt-1.5">
+                <div className="flex w-full items-center justify-between sm:w-32 sm:flex-col sm:items-start sm:pt-1.5">
                   <span className="text-sm font-semibold">{WEEKDAYS[d]}</span>
                   <span className={cx("text-xs tabular", mins ? "text-muted" : "text-faint")}>
                     {mins ? `${minutesToText(mins)} · ${blocks} blok` : "Çalışma yok"}
                   </span>
-                  {editable && ranges.length > 0 && (
-                    <button type="button" onClick={() => setCopyFrom(d)} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline sm:ml-0" title="Bu günün saatlerini diğer günlere kopyala">
-                      <Icon name="copy" size={13} /> Kopyala
-                    </button>
-                  )}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   {ranges.length === 0 && !editable && <span className="pt-1.5 text-sm text-faint">—</span>}
@@ -255,20 +248,6 @@ export function ScheduleSection({ studentId, editable }: { studentId: string; ed
             Bu saatlere göre program oluştur
           </Button>
         </div>
-      )}
-
-      {copyFrom != null && (
-        <CopyDaysModal
-          source={copyFrom}
-          labels={WEEKDAYS}
-          onClose={() => setCopyFrom(null)}
-          onApply={(targets) => {
-            const src = draft.slots[copyFrom];
-            setDraft((x) => (x ? { ...x, slots: x.slots.map((r, i) => (targets.includes(i) ? src.map((y) => ({ ...y })) : r)) } : x));
-            toast.show(`${targets.length} güne kopyalandı · kaydetmeyi unutma`);
-            setCopyFrom(null);
-          }}
-        />
       )}
 
       {genOpen && plans && (

@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql`, `guncelleme-3.sql`, `guncelleme-4.sql`, `guncelleme-5.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-5.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -56,12 +56,38 @@ Bu sürümü mevcut kuruluma yüklerken **bir kez** şunu yap: Supabase → SQL 
 - **Otomatik program oluştur:** son denemedeki yanlış/boşlara ve müsait günlere göre her öncelikli konu için kısa konu tekrarı + soru çözümü dağıtır, günlük/haftalık hedef soruyu hesaplar. Sonra tabloda istediğin gibi düzenlersin. Soru hedefleri ve konu başına üst sınır `planner.ts` içinde.
 - **Otomatik konu takibi:** görev tamamlanınca (ya da öğrenci hedef soru sayısına ulaşınca) konu takibi güncellenir: Konu → Bitti, Soru → Çalışılıyor, Tekrar → Tekrar edildi. Hiçbir zaman geri almaz.
 
+## Güncelleme 8 — gelişim panosu (gün / hafta / ay)
+
+SQL gerekmez. Yeni dosya: `progress.tsx`.
+
+- **Danışman → öğrenci → Özet** ve **öğrenci → İlerleme** ekranında "Gelişim" bölümü. Üstteki **Gün / Hafta / Ay** seçimi: son 30 gün, son 12 hafta veya son 6 ay.
+- Özet kutuları: bu dönem çözülen soru ve çalışma süresi (önceki döneme göre değişim), program tamamlama yüzdesi, doğru oranı.
+- Grafikler: sayısal/sözel çözülen soru, çalışma süresi, program tamamlama (%80 çizgisi), derslere göre soru, motivasyon-kaygı-enerji, uyku, TYT ve AYT net gelişimi. Çubukların üzerine gelince ayrıntı görünür.
+- Veriler programdaki görev sonuçlarından, günlük takipten ve denemelerden otomatik gelir.
+
+## Güncelleme 7 — takvim görünümü ve kolay düzenleme
+
+SQL gerekmez. Yeni dosya: `calendar.tsx`.
+
+- **Program → Takvim:** günler sütun, saatler satır. Bloğu sürükleyip başka gün/saate bırak; boş alana tıklayınca o saate görev ekle; bloğa tıklayınca düzenle. (Telefonda sürükleme yok; düzenleyicide gün/saat değiştirilir.)
+- **Görev düzenleyici:** "Başka konu öner" aynı dersten öncelikli konuları (deneme yanlışı, tekrar eden eksik, sıradaki konu) önerir. Öğrenci sonuçları katlanmış bölümde.
+- **Otomatik program:** yalnızca tarih ve TYT/AYT denemesi görünür; dersler, oran, sıra, rutinler "Gelişmiş ayarlar"da. Önizlemede her blokta **Değiştir** (başka konu) ve **×** (kaldır).
+- **Denemeler → Konu bazlı yanlış geçmişi:** her konu kaç denemede, hangi tarihlerde kaç yanlış/boş yapılmış. 2+ denemede tekrar eden eksikler otomatik programda öne alınır.
+
+## Güncelleme 6 — öğrenciyle paylaşılan notlar
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-5.sql` → **Run**. Yeni dosya: `notes.tsx`.
+
+- Öğrenci → **Notlar** sekmesi: üstte **"Öğrenciyle paylaşılan notlar"** (öğrenci Bugün ekranında görür, okuduğunda "Okundu" yazar), altta **"Özel görüşme notları"** (yalnızca sen görürsün).
+- Destek panelinde öğrencinin notuna **"Öğrenciye gönder"** ile yanıt verilebilir.
+- Öğrencinin destek ekranında 112 butonu yoktur; öğrenci danışmanına not bırakır.
+
 ## Güncelleme 5 — destek / risk yönlendirmesi
 
 Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-4.sql` → **Run**. Yeni dosya: `support.tsx`.
 
 - **Otomatik uyarı:** Öğrenci günlük takibi kaydettikçe son 3 kayıt (son 7 gün) incelenir: 3 kayıtta da kaygı 4-5, ya da 3 kayıtta da motivasyon ve enerji 1-2, ya da en az 2 gün yüksek kaygı + 5 saatten az uyku → uyarı. Eşikler `guncelleme-4.sql` içindeki `check_support_risk` fonksiyonunda.
-- **Öğrenci:** Bugün ekranında her zaman "Zor bir gün mü?" bağlantısı; otomatik uyarı oluşunca nazik bir destek kartı ("Konuşmak istiyorum" / "Şimdilik iyiyim"). Destek ekranında her zaman acil durumda 112 bilgisi ve arama butonu. Öğrenci uyarı nedenlerini ve danışman notlarını göremez.
+- **Öğrenci:** Bugün ekranında her zaman "Zor bir gün mü?" bağlantısı; otomatik uyarı oluşunca nazik bir destek kartı ("Konuşmak istiyorum" / "Şimdilik iyiyim"). Öğrenci uyarı nedenlerini ve danışman notlarını göremez.
 - **Danışman:** Öğrenciler sayfasının üstünde "Destek gerekenler" listesi (önce öğrencinin kendi istekleri). Öğrenci → Özet → "Destek ve takip": Gördüm / Görüştüm / Veliyle paylaştım / Okul rehberliğine bildirdim / Uzmana yönlendirdim / Not / Kapattım — her adım tarihiyle kaydedilir.
 - Bu bir kriz müdahale sistemi değildir; uyarılar danışman uygulamayı açtığında görülür.
 

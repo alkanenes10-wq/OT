@@ -1,10 +1,6 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
-import { CounselorSessions, WhatsAppReminder } from "./ekler";
-import { ParentReport } from "./veli-raporu";
-import { QuestionBank } from "./soru-bankasi";
-import { CounselorCalendar, TodaySessionsStrip } from "./takvim";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS, isCompleted } from "./curriculum";
 import { DailyLogSection } from "./daily";
@@ -17,9 +13,10 @@ import { ExamAnalyses } from "./exams";
 import { ScheduleSection } from "./schedule";
 import { CounselorTeam, TransferStudent } from "./team";
 import { SupportInbox, SupportPanel } from "./support";
+import { SharedNotesCounselor } from "./notes";
 import { PageHeader } from "./shell";
 import { TopicTracker } from "./topics";
-import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast, type IconName } from "./ui";
+import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast } from "./ui";
 
 /* ---------------- Danışman notları (öğrenci göremez) ---------------- */
 export function CounselorNotes({ studentId }: { studentId: string }) {
@@ -67,7 +64,7 @@ export function CounselorNotes({ studentId }: { studentId: string }) {
 
   return (
     <div className="space-y-4">
-      <Card title="Yeni görüşme notu" subtitle="Bu notları yalnızca siz görürsünüz; öğrenci erişemez.">
+      <Card title="Özel görüşme notları" subtitle="Bu notları yalnızca siz görürsünüz; öğrenci hiçbir koşulda erişemez.">
         <div className="space-y-3">
           <div className="w-48">
             <Field label="Tarih" htmlFor="note-date">
@@ -474,11 +471,10 @@ function StudentList() {
       ) : rows ? (
         <>
           <div className="mb-4 grid grid-cols-3 gap-3">
-            <Summary icon="users" label="Aktif öğrenci" value={activeRows.length} />
-            <Summary icon="journal" label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
-            <Summary icon="alert" label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
+            <Summary label="Aktif öğrenci" value={activeRows.length} />
+            <Summary label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
+            <Summary label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
           </div>
-          <TodaySessionsStrip />
           <SupportInbox names={new Map((rows ?? []).map((r) => [r.student.id, r.student.full_name]))} />
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <div className="relative min-w-0 flex-1">
@@ -506,16 +502,11 @@ function StudentList() {
   );
 }
 
-function Summary({ label, value, tone, icon }: { label: string; value: string | number; tone?: "warning"; icon: IconName }) {
+function Summary({ label, value, tone }: { label: string; value: string | number; tone?: "warning" }) {
   return (
-    <div className="card flex items-center gap-3 px-3 py-3 sm:px-5 sm:py-4">
-      <span className={cx("hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex", tone === "warning" ? "bg-warning-soft text-warning" : "bg-primary-soft text-primary-ink")}>
-        <Icon name={icon} size={20} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-medium text-muted">{label}</span>
-        <span className={cx("display mt-0.5 block text-[26px] leading-tight tabular", tone === "warning" && "text-warning")}>{value}</span>
-      </span>
+    <div className="card px-3 py-3 sm:px-4">
+      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className={cx("display mt-1 text-[28px] leading-tight tabular", tone === "warning" && "text-warning")}>{value}</p>
     </div>
   );
 }
@@ -524,21 +515,11 @@ function StudentCard({ row }: { row: Row }) {
   const s = row.student;
   const logTone = !row.lastLog ? "text-faint" : row.lastLog === todayISO() ? "text-success" : "text-muted";
   return (
-    <A to={{ v: "ogrenci", id: s.id }} className="card block h-full p-4 transition hover:border-primary/40 sm:p-5">
+    <A to={{ v: "ogrenci", id: s.id }} className="card block h-full p-4 transition hover:border-primary/50 hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary-ink">
-            {s.full_name
-              .split(/\s+/)
-              .map((w) => w[0])
-              .slice(0, 2)
-              .join("")
-              .toLocaleUpperCase("tr-TR")}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate font-semibold capitalize">{s.full_name.toLocaleLowerCase("tr-TR")}</p>
-            <p className="truncate text-xs text-faint">@{s.username}</p>
-          </div>
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{s.full_name}</p>
+          <p className="truncate text-xs text-faint">@{s.username}</p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1">
           {!s.is_active && <Badge tone="danger">Pasif</Badge>}
@@ -546,7 +527,7 @@ function StudentCard({ row }: { row: Row }) {
           {s.grade && <Badge>{s.grade}</Badge>}
         </div>
       </div>
-      <dl className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-sm">
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <div>
           <dt className="text-[11px] text-muted">Son günlük</dt>
           <dd className={cx("font-medium", logTone)}>{relativeDay(row.lastLog)}</dd>
@@ -710,17 +691,14 @@ function NewStudent() {
   );
 }
 
-type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "sorular" | "gorusmeler" | "veli" | "notlar" | "hesap";
-const TABS: { value: Tab; label: string; icon: IconName }[] = [
+type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "notlar" | "hesap";
+const TABS: { value: Tab; label: string; icon: "chart" | "calendar" | "clock" | "target" | "journal" | "book" | "note" | "user" }[] = [
   { value: "ozet", label: "Özet", icon: "chart" },
   { value: "program", label: "Program", icon: "calendar" },
   { value: "saatler", label: "Saatler", icon: "clock" },
   { value: "denemeler", label: "Denemeler", icon: "target" },
   { value: "gunluk", label: "Günlük", icon: "journal" },
   { value: "konular", label: "Konular", icon: "book" },
-  { value: "sorular", label: "Sorular", icon: "question" },
-  { value: "gorusmeler", label: "Görüşmeler", icon: "video" },
-  { value: "veli", label: "Veli raporu", icon: "printer" },
   { value: "notlar", label: "Notlar", icon: "note" },
   { value: "hesap", label: "Hesap", icon: "user" },
 ];
@@ -768,13 +746,10 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           {student.grade && <Badge>{student.grade}</Badge>}
           {student.exam_year && <Badge>YKS {student.exam_year}</Badge>}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted">
-            @{student.username}
-            {student.target ? ` · Hedef: ${student.target}` : ""}
-          </p>
-          <WhatsAppReminder student={student} />
-        </div>
+        <p className="mt-0.5 text-sm text-muted">
+          @{student.username}
+          {student.target ? ` · Hedef: ${student.target}` : ""}
+        </p>
       </div>
 
       <Tabs tabs={TABS} value={tab} onChange={changeTab} />
@@ -799,7 +774,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         )}
         {tab === "gunluk" && (
           <div className="max-w-3xl">
-            <DailyLogSection studentId={student.id} studentName={student.full_name} audience="counselor" />
+            <DailyLogSection studentId={student.id} studentName={student.full_name} />
           </div>
         )}
         {tab === "konular" && (
@@ -807,23 +782,9 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
             <TopicTracker studentId={student.id} studentName={student.full_name} />
           </div>
         )}
-        {tab === "sorular" && (
-          <div className="max-w-3xl">
-            <QuestionBank studentId={student.id} audience="counselor" />
-          </div>
-        )}
-        {tab === "gorusmeler" && (
-          <div className="max-w-3xl">
-            <CounselorSessions student={student} />
-          </div>
-        )}
-        {tab === "veli" && (
-          <div className="max-w-3xl">
-            <ParentReport student={student} />
-          </div>
-        )}
         {tab === "notlar" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl space-y-6">
+            <SharedNotesCounselor studentId={student.id} />
             <CounselorNotes studentId={student.id} />
           </div>
         )}
@@ -890,7 +851,6 @@ export function CounselorApp() {
   const { route } = useRoute();
   if (route.v === "yeni") return <NewStudent />;
   if (route.v === "ayarlar") return <CounselorSettings />;
-  if (route.v === "takvim") return <CounselorCalendar />;
   if (route.v === "ogrenci" && route.id) return <StudentDetail key={route.id} id={route.id} tab={route.t} />;
   return <StudentList />;
 }
