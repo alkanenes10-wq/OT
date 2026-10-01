@@ -77,19 +77,54 @@ export function LineChart({
   const x = (i: number) => pad.l + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
   const y = (v: number) => pad.t + (1 - (v - yMin) / (yMax - yMin)) * ih;
 
+  // Yumuşak çizgi: tekdüze kübik eğri (Fritsch–Carlson) — veri noktalarından geçer, taşma yapmaz
   const pathFor = (s: LineSeries) => {
-    let d = "";
-    let pen = false;
+    const segs: { x: number; y: number }[][] = [];
+    let cur: { x: number; y: number }[] = [];
     s.values.forEach((v, i) => {
       if (v == null) {
-        pen = false;
+        if (cur.length) segs.push(cur);
+        cur = [];
         return;
       }
-      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
-      pen = true;
+      cur.push({ x: x(i), y: y(v) });
     });
-    return d;
+    if (cur.length) segs.push(cur);
+    const f = (n: number) => n.toFixed(1);
+    return segs
+      .map((p) => {
+        if (p.length === 1) return "";
+        if (p.length === 2) return `M${f(p[0].x)},${f(p[0].y)}L${f(p[1].x)},${f(p[1].y)}`;
+        const n = p.length;
+        const dx = p.slice(1).map((q, i) => q.x - p[i].x);
+        const m = p.slice(1).map((q, i) => (q.y - p[i].y) / (dx[i] || 1));
+        const t = p.map((_, i) => (i === 0 ? m[0] : i === n - 1 ? m[n - 2] : m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2));
+        for (let i = 0; i < n - 1; i++) {
+          if (m[i] === 0) {
+            t[i] = 0;
+            t[i + 1] = 0;
+            continue;
+          }
+          const a = t[i] / m[i];
+          const b = t[i + 1] / m[i];
+          const h = a * a + b * b;
+          if (h > 9) {
+            const k = 3 / Math.sqrt(h);
+            t[i] = k * a * m[i];
+            t[i + 1] = k * b * m[i];
+          }
+        }
+        let d = `M${f(p[0].x)},${f(p[0].y)}`;
+        for (let i = 0; i < n - 1; i++) {
+          const h = dx[i] / 3;
+          d += `C${f(p[i].x + h)},${f(p[i].y + t[i] * h)} ${f(p[i + 1].x - h)},${f(p[i + 1].y - t[i + 1] * h)} ${f(p[i + 1].x)},${f(p[i + 1].y)}`;
+        }
+        return d;
+      })
+      .join("");
   };
+  /** Komşusu olmayan tek nokta (çizgi çizilemez) — görünür kalmalı */
+  const isolated = (s: LineSeries, i: number) => s.values[i] != null && s.values[i - 1] == null && s.values[i + 1] == null;
 
   // Doğrudan etiketler (son değer) — geniş ekranda, çakışmayı önleyerek
   const endLabels = compact
@@ -166,12 +201,14 @@ export function LineChart({
             {hover != null && <line x1={hx} x2={hx} y1={pad.t} y2={pad.t + ih} style={{ stroke: "var(--axis)" }} strokeWidth={1} />}
             {visible.map((s) => (
               <g key={s.key}>
-                <path d={pathFor(s)} fill="none" style={{ stroke: s.color }} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-                {s.values.map((v, i) =>
-                  v == null || (!markers && hover !== i) ? null : (
-                    <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 4} style={{ fill: s.color, stroke: "var(--surface)" }} strokeWidth={2} />
-                  ),
-                )}
+                <path d={pathFor(s)} fill="none" style={{ stroke: s.color }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+                {s.values.map((v, i) => {
+                  if (v == null) return null;
+                  const solo = isolated(s, i);
+                  if (!markers && hover !== i && !solo) return null;
+                  const r = hover === i ? 3.5 : solo ? 3 : 1.75;
+                  return <circle key={i} cx={x(i)} cy={y(v)} r={r} style={{ fill: s.color, stroke: "var(--surface)", opacity: hover === i || solo ? 1 : 0.85 }} strokeWidth={hover === i ? 1.5 : 0} />;
+                })}
               </g>
             ))}
             {endLabels.map((e) => (

@@ -47,6 +47,15 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncelleme 2.7 — konu ilerlemesi ve çalışma saatlerine otomatik yerleştirme
+
+SQL gerekmez (2.6'nın SQL'leri yeterli). Yeni dosya: `yerlestir.ts`.
+
+- **Soruları biten konu atlanır:** Otomatik programda bir konunun kitaptaki testleri bittiyse (katalogda test → konu eşleşmesi varsa) ya da kitap yoksa o konuda 3 soru görevi tamamlandıysa konu atlanır, bölümdeki sıradaki konuya geçilir. Önizlemede "Soruları biten konular atlandı" kutusunda görünür. Denemede o konuda yanlış varsa "tekrar" olarak yine programa girer.
+- **Kitaptan sırayla ilerleme:** Öğrencinin kitabındaki sıradaki konu haftada en az 2 blok alır; bloklara sıradaki testler (ör. T4, T5) otomatik bağlanır. Testler hafta içinde biterse o konu yerine başka konuya geçilir. Görev tamamlanınca testler kitapta işaretlenir.
+- **TYT/AYT dengesi düzeltildi:** denge artık sayısal ve sözel içinde ayrı kurulur (önceden SAY öğrencisinde sayısal blokların neredeyse hepsi AYT'ye kayıyordu).
+- **Çalışma saatlerine otomatik yerleştirme:** saatsiz eklenen görev, o günün çalışma saatlerindeki ilk boş yere yerleşir; görev başka güne taşınınca yeni günde boş yere alınır; takvimde çalışma saati dışına ya da başka bloğun üstüne bırakılan blok en yakın uygun saate kayar. **"Saatlere yerleştir"** düğmesi haftanın bütün bloklarını sırası korunarak çalışma saatlerine dizer.
+
 ## Güncelleme 2.6 — kaynak kataloğu
 
 Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-10.sql` → **Run** (2.5'i henüz yüklemediyseniz önce `guncelleme-9.sql`). Yeni dosya: `katalog.tsx`.

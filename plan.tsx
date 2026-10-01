@@ -43,8 +43,9 @@ import {
   type Resource,
 } from "./lib";
 import { CopyDaysModal } from "./ekler";
-import { buildCandidates, buildTimedPlan, type Candidate, type DraftTask, type HistoryTask } from "./planner";
+import { buildCandidates, buildTimedPlan, type BookInfo, type Candidate, type DraftTask, type HistoryTask } from "./planner";
 import { CalendarView } from "./calendar";
+import { hasSchedule, reflowDay, snapToSchedule, suggestSlot } from "./yerlestir";
 import { fetchResources, resourceLabel, TaskResourceLine } from "./kaynaklar";
 import {
   Badge,
@@ -140,6 +141,12 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
   const [editing, setEditing] = useState<Partial<PlanTask> | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
+  const [schedule, setSchedule] = useState<StudySchedule | null>(null);
+  useEffect(() => {
+    fetchSchedule(studentId)
+      .then(setSchedule)
+      .catch(() => setSchedule(null));
+  }, [studentId]);
 
   useEffect(() => {
     if (window.innerWidth >= 900) setView("takvim");
@@ -236,6 +243,14 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
 
   async function saveTask(draft: Partial<PlanTask>) {
     if (!plan) return;
+    // Çalışma saatlerine göre otomatik saat: saat verilmemişse ya da görev başka güne taşındıysa
+    const orig = draft.id ? tasks.find((x) => x.id === draft.id) : null;
+    const dayChanged = Boolean(orig && orig.day_index !== draft.day_index && orig.start_time === draft.start_time);
+    if ((!draft.start_time || dayChanged) && hasSchedule(schedule)) {
+      const sug = suggestSlot(schedule, plan.start_date, draft.day_index ?? 0, tasks.filter((x) => x.day_index === (draft.day_index ?? 0)), draft.id, draft.duration_min);
+      if (sug) draft = { ...draft, ...sug };
+      else if (dayChanged) draft = { ...draft, start_time: null };
+    }
     const payload = {
       day_index: draft.day_index ?? 0,
       subject: normalizeSubject(draft.subject || "DİĞER"),
@@ -264,7 +279,11 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
     replace(data as PlanTask);
   }
 
-  async function moveTask(t: PlanTask, dayIndex: number, time: string) {
+  async function moveTask(t: PlanTask, dayIndex: number, wanted: string) {
+    // Bırakılan yer çalışma saati dışındaysa / çakışıyorsa en yakın uygun saate kaydır
+    const snap = plan ? snapToSchedule(schedule, plan.start_date, dayIndex, tasks.filter((x) => x.day_index === dayIndex), t, wanted) : { time: wanted, moved: false };
+    const time = snap.time;
+    if (snap.moved) toast.show(`Çalışma saatine göre ${time}'e yerleştirildi`);
     if (t.day_index === dayIndex && t.start_time === time) return;
     const before = t;
     setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, day_index: dayIndex, start_time: time, duration_min: x.duration_min ?? 40 } : x)));
@@ -272,6 +291,26 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
       replace(await patchTask(t.id, { day_index: dayIndex, start_time: time, duration_min: t.duration_min ?? 40 }));
     } catch (e) {
       replace(before);
+      toast.show(errorText(e), "danger");
+    }
+  }
+
+  /** Haftanın bloklarını sırası korunarak çalışma saatlerine dizer */
+  async function reflowWeek() {
+    if (!plan || !schedule || !hasSchedule(schedule)) return toast.show("Önce Saatler sekmesinden çalışma saatlerini girin", "danger");
+    const all: { id: string; start_time: string; duration_min: number }[] = [];
+    let overflow = 0;
+    for (let d = 0; d < 7; d++) {
+      const r = reflowDay(schedule, plan.start_date, d, real.filter((x) => x.day_index === d));
+      all.push(...r.changes);
+      overflow += r.overflow.length;
+    }
+    if (!all.length) return toast.show(overflow ? `${overflow} blok çalışma saatlerine sığmıyor` : "Bloklar zaten çalışma saatlerine uygun");
+    if (!confirmAction(`${all.length} bloğun saati, sırası korunarak çalışma saatlerine göre değiştirilecek. Devam edilsin mi?`)) return;
+    try {
+      for (const c of all) replace(await patchTask(c.id, { start_time: c.start_time, duration_min: c.duration_min }));
+      toast.show(`${all.length} blok saatlere yerleştirildi${overflow ? ` · ${overflow} blok sığmadı (saatleri değişmedi)` : ""}`);
+    } catch (e) {
       toast.show(errorText(e), "danger");
     }
   }
@@ -322,6 +361,11 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
         <Button variant="secondary" icon="plus" onClick={() => setNewOpen(true)}>
           Boş hafta / kopyala
         </Button>
+        {plan && hasSchedule(schedule) && (
+          <Button variant="ghost" icon="clock" onClick={reflowWeek} title="Blokları sırası korunarak öğrencinin çalışma saatlerine dizer">
+            Saatlere yerleştir
+          </Button>
+        )}
         {plan && (
           <div className="ml-auto w-64">
             <Segmented
@@ -389,7 +433,7 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
               days={days}
               onToggle={toggle}
               onEdit={(t) => setEditing(t)}
-              onAdd={(d, subject) => setEditing({ day_index: d, subject, task_type: "soru" })}
+              onAdd={(d, subject) => setEditing({ day_index: d, subject, task_type: "soru", ...(suggestSlot(schedule, plan.start_date, d, real.filter((x) => x.day_index === d)) ?? {}) })}
               onLevel={setLevel}
               onPickDay={(d) => {
                 setDay(d);
@@ -408,7 +452,7 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
               onSolved={setSolved}
               onPatch={patchResult}
               onEdit={(t) => setEditing(t)}
-              onAdd={(d) => setEditing({ day_index: d, subject: "TÜRKÇE", task_type: "soru" })}
+              onAdd={(d) => setEditing({ day_index: d, subject: "TÜRKÇE", task_type: "soru", ...(suggestSlot(schedule, plan.start_date, d, real.filter((x) => x.day_index === d)) ?? {}) })}
               onLevel={setLevel}
               onDaySaved={(d) => setDays((ds) => [...ds.filter((x) => x.day_index !== d.day_index), d])}
             />
@@ -1288,6 +1332,7 @@ export function GeneratorModal({
     field: string | null;
     grade: string | null;
     history: HistoryTask[];
+    books: BookInfo[];
   } | null>(null);
   const [start, setStart] = useState(todayISO());
   const [tytId, setTytId] = useState("");
@@ -1317,20 +1362,22 @@ export function GeneratorModal({
         if (recent.length) {
           const { data: rows, error } = await sb()
             .from("plan_tasks")
-            .select("plan_id, topic_id, task_type, done")
+            .select("plan_id, topic_id, task_type, done, solved")
             .in("plan_id", recent.map((p) => p.id));
           if (error) throw error;
           const startOf = new Map(recent.map((p) => [p.id, p.start_date]));
-          history = ((rows ?? []) as { plan_id: string; topic_id: string | null; task_type: TaskType; done: boolean }[]).map((r) => ({
+          history = ((rows ?? []) as { plan_id: string; topic_id: string | null; task_type: TaskType; done: boolean; solved: number | null }[]).map((r) => ({
             plan_start: startOf.get(r.plan_id) ?? "",
             topic_id: r.topic_id,
             task_type: r.task_type,
             done: r.done,
+            solved: r.solved,
           }));
         }
+        const books = await fetchBooks(studentId);
         const field = (prof.data as { field: string | null } | null)?.field ?? null;
         const grade = (prof.data as { grade: string | null } | null)?.grade ?? null;
-        setData({ plans, analyses, progress, schedule, field, grade, history });
+        setData({ plans, analyses, progress, schedule, field, grade, history, books });
         setSections(sectionsForField(field));
         setTytShare(defaultShare(field, grade));
         const pre = initialAnalysisId ? analyses.find((a) => a.id === initialAnalysisId) : undefined;
@@ -1363,6 +1410,7 @@ export function GeneratorModal({
       excluded,
       pattern: pattern.split("-").map(Number) as [number, number],
       allAnalyses: data.analyses,
+      books: data.books,
     });
   }, [data, start, sections, tytId, aytId, tytShare, routines, carryOver, excluded, pattern]);
 
@@ -1386,7 +1434,7 @@ export function GeneratorModal({
         if (!c) return b;
         const type: TaskType = c.mode === "konu" ? "konu" : b.task_type === "konu" ? "soru" : b.task_type;
         const q = Math.max(5, Math.round(((b.duration_min ?? 40) * (c.category === "sayisal" ? 0.6 : 0.8)) / 5) * 5);
-        return { ...b, topic_id: c.topic_id, subject: c.subject, category: c.category, task_type: type, target_questions: type === "konu" ? null : (b.target_questions ?? q), content: type === "konu" ? "Konu çalışması + örnek sorular" : b.content };
+        return { ...b, resource_id: undefined, resource_tests: undefined, topic_id: c.topic_id, subject: c.subject, category: c.category, task_type: type, target_questions: type === "konu" ? null : (b.target_questions ?? q), content: type === "konu" ? "Konu çalışması + örnek sorular" : b.content };
       });
   }, [result, overrides, removed]);
   function swap(b: (typeof finalBlocks)[number]) {
@@ -1401,6 +1449,7 @@ export function GeneratorModal({
     setOverrides((o) => ({ ...o, [k]: opts[i % opts.length].topic_id }));
     setCycle((c) => ({ ...c, [k]: i + 1 }));
   }
+  const bookLabel = useMemo(() => new Map((data?.books ?? []).map((b) => [b.resource_id, b.label])), [data]);
   const finalTasks: DraftTask[] = finalBlocks.map(({ category: _c, exam: _e, routine: _r, ...t }) => t);
   const usedList = useMemo(() => {
     if (!result) return [];
@@ -1655,6 +1704,11 @@ export function GeneratorModal({
                           <span className="w-10 shrink-0 font-semibold tabular">{b.start_time}</span>
                           <span className="w-24 shrink-0 truncate text-[11px] text-muted">{b.subject}</span>
                           <span className="min-w-0 flex-1 truncate">{b.topic_id ? (topicName.get(b.topic_id) ?? b.topic_id) : b.content}</span>
+                          {b.resource_tests && (
+                            <span className="shrink-0 rounded bg-primary-soft px-1 text-[10px] font-semibold text-primary-ink" title={`${bookLabel.get(b.resource_id ?? "") ?? "Kitap"} · Test ${b.resource_tests}`}>
+                              T{b.resource_tests}
+                            </span>
+                          )}
                           <span className={cx("rounded px-1 text-[9px] font-bold uppercase", TYPE_TONE[b.task_type])}>{typeShort(b.task_type)}</span>
                           <span className="w-8 shrink-0 text-right tabular text-muted">{b.target_questions ?? ""}</span>
                           {!b.routine && (
@@ -1683,6 +1737,20 @@ export function GeneratorModal({
               })}
             </div>
           </div>
+
+          {result.exhausted.length > 0 && (
+            <div className="rounded-xl border border-line bg-surface-2/60 p-3 text-xs">
+              <p className="mb-1 font-medium text-fg">Soruları biten konular atlandı, sıradaki konulara geçildi</p>
+              <p className="text-muted">
+                {result.exhausted
+                  .slice(0, 8)
+                  .map((x) => `${x.name} (${x.why})`)
+                  .join(" · ")}
+                {result.exhausted.length > 8 ? ` · +${result.exhausted.length - 8}` : ""}
+              </p>
+              <p className="mt-1 text-faint">Denemede bu konularda yanlış varsa “tekrar” olarak yine programa girer.</p>
+            </div>
+          )}
 
           <div>
             <p className="mb-2 text-sm font-medium">Bu hafta çalışılacak konular</p>
@@ -2060,3 +2128,26 @@ function DayDetails({
   );
 }
 
+
+
+/** Öğrencinin aktif, katalogdan seçilmiş kitapları (test → konu eşleşmesi + çözülmüş testler). Tablolar yoksa boş döner. */
+async function fetchBooks(studentId: string): Promise<BookInfo[]> {
+  try {
+    const { data: rs, error } = await sb().from("resources").select("id, title, publisher, catalog_id, status").eq("student_id", studentId).neq("status", "done");
+    if (error || !rs?.length) return [];
+    const res = (rs as { id: string; title: string; publisher: string; catalog_id: string | null; status: string }[]).filter((r) => r.catalog_id && r.status === "active");
+    if (!res.length) return [];
+    const [{ data: cats }, { data: prog }] = await Promise.all([
+      sb().from("resource_catalog").select("id, test_topics").in("id", res.map((r) => r.catalog_id as string)),
+      sb().from("resource_progress").select("resource_id, test_no").in("resource_id", res.map((r) => r.id)),
+    ]);
+    const ranges = new Map(((cats ?? []) as { id: string; test_topics: BookInfo["ranges"] }[]).map((c) => [c.id, c.test_topics ?? []]));
+    const solved = new Map<string, number[]>();
+    for (const p of (prog ?? []) as { resource_id: string; test_no: number }[]) solved.set(p.resource_id, [...(solved.get(p.resource_id) ?? []), p.test_no]);
+    return res
+      .map((r) => ({ resource_id: r.id, label: r.publisher ? `${r.publisher} ${r.title}` : r.title, ranges: ranges.get(r.catalog_id as string) ?? [], solved: solved.get(r.id) ?? [] }))
+      .filter((b) => b.ranges.length > 0);
+  } catch {
+    return [];
+  }
+}

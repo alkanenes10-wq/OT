@@ -30,7 +30,13 @@ export type DraftTask = {
   sort: number;
   start_time: string | null;
   duration_min: number | null;
+  /** Kitaptan ilerleme: bağlı kaynak ve test numaraları ("12-13") */
+  resource_id?: string | null;
+  resource_tests?: string | null;
 };
+
+/** Öğrencinin kitabı: katalogdaki test → konu eşleşmesi ve çözülmüş testler */
+export type BookInfo = { resource_id: string; label: string; ranges: { from: number; to: number; topic_id: string }[]; solved: number[] };
 
 /** Önceki programlardan bir görev (geçmiş) */
 export type HistoryTask = {
@@ -38,6 +44,7 @@ export type HistoryTask = {
   topic_id: string | null;
   task_type: TaskType;
   done: boolean;
+  solved?: number | null;
 };
 
 export type Exam = "TYT" | "AYT";
@@ -53,6 +60,11 @@ export type Candidate = {
   mode: "konu" | "tekrar" | "soru";
   reasons: string[];
   uses: number;
+  /** Kitaplarda bu konuya ait toplam / kalan test (kitap eşleşmesi yoksa 0) */
+  bookTotal: number;
+  bookLeft: number;
+  /** Kitapta testi kalan ilk konu: haftada en az 2 blok alması sağlanır */
+  bookNext?: boolean;
 };
 
 export type PlanBlock = DraftTask & { category: Category | null; exam: Exam | null; routine: boolean };
@@ -73,12 +85,16 @@ export type TimedPlanInput = {
   pattern?: [number, number];
   /** Tüm deneme analizleri: birden çok denemede tekrarlayan yanlışlar öne alınır */
   allAnalyses?: Pick<ExamAnalysis, "exam_date" | "exam_type" | "results">[];
+  /** Öğrencinin aktif kitapları: soruları biten konu atlanır, sıradaki konuya geçilir */
+  books?: BookInfo[];
 };
 
 export type TimedPlan = {
   tasks: DraftTask[];
   blocks: PlanBlock[];
   candidates: Candidate[]; // haftada kullanılan konular (öncelik sırasıyla)
+  /** Soruları bittiği için atlanan konular (kitap testleri bitti / yeterince soru görevi tamamlandı) */
+  exhausted: { topic_id: string; name: string; why: string }[];
   pool: Candidate[]; // tüm aday konular (önizlemede "başka konu" için)
   dayMinutes: number[];
   stats: { sayisal: number; sozel: number; tyt: number; ayt: number; questions: number };
@@ -96,6 +112,64 @@ const ROUTINE_MIN = 20;
 const ROUTINE_BREAK = 5;
 const MIN_BLOCK = 25;
 const MAX_USES = 3;
+/** Kitap eşleşmesi olmayan konularda: bu kadar soru görevi tamamlandıysa soru çalışması "bitti" sayılır */
+const SORU_DONE_TASKS = 3;
+
+/** Kitaplardaki çözülmemiş testler: konu → [{kaynak, test no}] (kitap ve test sırasıyla) */
+export function bookQueues(books: BookInfo[] = []) {
+  const total = new Map<string, number>();
+  const left = new Map<string, { resource_id: string; label: string; no: number }[]>();
+  for (const b of books) {
+    const solved = new Set(b.solved);
+    for (const r of b.ranges) {
+      for (let n = r.from; n <= Math.max(r.from, r.to); n++) {
+        total.set(r.topic_id, (total.get(r.topic_id) ?? 0) + 1);
+        if (!solved.has(n)) left.set(r.topic_id, [...(left.get(r.topic_id) ?? []), { resource_id: b.resource_id, label: b.label, no: n }]);
+      }
+    }
+  }
+  // Her kitapta testi kalan ilk konu: kitapta "sıradaki" konu
+  const next = new Set<string>();
+  for (const b of books) {
+    const solved = new Set(b.solved);
+    const r = [...b.ranges].sort((x, y) => x.from - y.from).find((r) => {
+      for (let n = r.from; n <= Math.max(r.from, r.to); n++) if (!solved.has(n)) return true;
+      return false;
+    });
+    if (r) next.add(r.topic_id);
+  }
+  return { total, left, next };
+}
+
+/** [12,13,14,18] → "12-14, 18" */
+export function testRangeText(nos: number[]) {
+  const xs = [...nos].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < xs.length; ) {
+    let j = i;
+    while (j + 1 < xs.length && xs[j + 1] === xs[j] + 1) j++;
+    parts.push(i === j ? `${xs[i]}` : `${xs[i]}-${xs[j]}`);
+    i = j + 1;
+  }
+  return parts.join(", ");
+}
+
+/** Soruları biten konular (önizlemede bilgi için) */
+export function exhaustedTopics(input: Pick<TimedPlanInput, "books" | "history" | "progress" | "sections">) {
+  const { total, left } = bookQueues(input.books);
+  const status = new Map(input.progress.map((p) => [p.topic_id, p.status]));
+  const soruDone = new Map<string, number>();
+  for (const h of input.history) if (h.topic_id && h.done && h.task_type === "soru") soruDone.set(h.topic_id, (soruDone.get(h.topic_id) ?? 0) + 1);
+  const out: { topic_id: string; name: string; why: string }[] = [];
+  for (const sec of input.sections)
+    for (const t of SECTION_TOPICS.get(sec) ?? []) {
+      const bt = total.get(t.id) ?? 0;
+      const st = status.get(t.id) ?? "not_started";
+      if (bt > 0 && !(left.get(t.id)?.length)) out.push({ topic_id: t.id, name: t.name, why: `kitaptaki ${bt} test bitti` });
+      else if (bt === 0 && st !== "not_started" && (soruDone.get(t.id) ?? 0) >= SORU_DONE_TASKS) out.push({ topic_id: t.id, name: t.name, why: `${soruDone.get(t.id)} soru görevi tamamlandı` });
+    }
+  return out;
+}
 
 /** Günün zaman aralıklarını çalışma bloklarına böler */
 export function sliceDay(ranges: TimeRange[], blockMin: number, breakMin: number, routines: number) {
@@ -167,8 +241,14 @@ export function buildCandidates(input: TimedPlanInput): Candidate[] {
     }
   }
 
+  // Soru çalışmasının bittiği konular: kitaptaki testleri bitmiş ya da (kitap yoksa) yeterince soru görevi tamamlanmış
+  const { total: bookTotal, left: bookLeft, next: bookNext } = bookQueues(input.books);
+  const soruDone = new Map<string, number>();
+  for (const h of input.history) if (h.topic_id && h.done && h.task_type === "soru") soruDone.set(h.topic_id, (soruDone.get(h.topic_id) ?? 0) + 1);
+
   const out: Candidate[] = [];
   for (const sec of input.sections) {
+    let lastExhausted = "";
     const topics = SECTION_TOPICS.get(sec) ?? [];
     let newSlots = 1; // her bölümde sıradaki ilk başlanmamış konu "yeni konu" olur
     for (const t of topics) {
@@ -179,6 +259,16 @@ export function buildCandidates(input: TimedPlanInput): Candidate[] {
       const reasons: string[] = [];
       let score = 0;
       let mode: Candidate["mode"] = "soru";
+      const bTotal = bookTotal.get(t.id) ?? 0;
+      const bLeft = bookLeft.get(t.id)?.length ?? 0;
+      const exhausted = bTotal > 0 ? bLeft === 0 : st !== "not_started" && (soruDone.get(t.id) ?? 0) >= SORU_DONE_TASKS;
+      const urgent = (def && def.wrong + def.empty > 0) || (chronic.get(t.id) ?? 0) >= 2;
+      if (exhausted && !urgent && !(input.carryOver && h?.pending)) {
+        // Bu konunun soruları bitti → atla; bölümdeki sıradaki yeni konu öne çıksın
+        if (st !== "done" && st !== "reviewed") newSlots++;
+        lastExhausted = TOPIC_NAME.get(t.id) ?? t.id;
+        continue;
+      }
 
       if (def && def.wrong + def.empty > 0) {
         score += 10 + 6 * (def.wrong + 0.7 * def.empty);
@@ -205,17 +295,28 @@ export function buildCandidates(input: TimedPlanInput): Candidate[] {
         score += 5;
         if (!reasons.length) reasons.push("Çalışılıyor");
       }
+      if (bLeft > 0 && (st !== "not_started" || bookNext.has(t.id))) {
+        // Kitapta testi kalan konu: soru çözmeye devam; kitaptaki sıradaki konu daha öncelikli
+        score += bookNext.has(t.id) ? 14 : 4;
+        if (mode === "tekrar" && !def && times < 2) mode = "soru";
+        reasons.push(bookNext.has(t.id) ? `Kitapta sıradaki konu (${bLeft} test)` : `Kitapta ${bLeft} test kaldı`);
+      }
+      if (exhausted && urgent) {
+        mode = "tekrar";
+        reasons.push(bTotal > 0 ? "Kitaptaki testler bitti → tekrar" : "Soru çalışması tamamlandı → tekrar");
+      }
       if (st === "not_started" && !def && !h && newSlots > 0) {
         newSlots--;
         score += 5;
         mode = "konu";
-        reasons.push("Sıradaki yeni konu");
+        reasons.push(lastExhausted ? `${lastExhausted} soruları bitti → sıradaki konu` : "Sıradaki yeni konu");
+        lastExhausted = "";
       }
       if ((st === "done" || st === "reviewed") && !def && !h?.pending) {
         const weeks = h?.weeksAgo ?? 4;
         if (weeks >= 2) {
           score += 1 + Math.min(weeks, 6) * 0.5;
-          mode = "tekrar";
+          if (!bLeft) mode = "tekrar";
           reasons.push(h ? `${weeks} haftadır tekrar edilmedi` : "Tekrar zamanı");
         }
       }
@@ -233,6 +334,9 @@ export function buildCandidates(input: TimedPlanInput): Candidate[] {
         mode,
         reasons,
         uses: 0,
+        bookTotal: bTotal,
+        bookLeft: bLeft,
+        bookNext: bookNext.has(t.id) && bLeft > 0,
       });
     }
   }
@@ -258,11 +362,19 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
   }
   candidates.sort((a, b) => b.score - a.score);
   const counts = { TYT: 0, AYT: 0 };
+  // TYT/AYT dengesi kategori içinde kurulur (ör. SAY öğrencisinde sözel blokların hepsi TYT olduğu için
+  // sayısal blokların hepsi AYT'ye kaymasın)
+  const catExam = { sayisal: { TYT: 0, AYT: 0 }, sozel: { TYT: 0, AYT: 0 } };
   const catCounts = { sayisal: 0, sozel: 0 };
   const usedPerDay = new Map<string, Set<number>>();
 
+  // Kitaptaki sıradaki testler: hafta içinde bitince o konu yerine başka konuya geçilir
+  const queues = bookQueues(input.books).left;
+  const qLeft = (c: Candidate) => queues.get(c.topic_id)?.length ?? 0;
   const pool = (cat: Category, exam: Exam | null) =>
-    candidates.filter((c) => c.category === cat && c.uses < MAX_USES && (!exam || c.exam === exam || c.exam === "BOTH"));
+    candidates.filter(
+      (c) => c.category === cat && c.uses < MAX_USES && (!exam || c.exam === exam || c.exam === "BOTH") && !(c.bookTotal > 0 && qLeft(c) === 0 && c.uses > 0 && c.mode !== "tekrar"),
+    );
 
   for (let d = 0; d < 7; d++) {
     const date = addDays(input.start, d);
@@ -302,8 +414,9 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
       k++;
       if (!pool(cat, null).length) cat = cat === "sayisal" ? "sozel" : "sayisal";
       // TYT / AYT dengesi
-      const total = counts.TYT + counts.AYT;
-      let exam: Exam = total === 0 ? (share >= 0.5 ? "TYT" : "AYT") : counts.TYT / total < share ? "TYT" : "AYT";
+      const ce = catExam[cat];
+      const total = ce.TYT + ce.AYT;
+      let exam: Exam = total === 0 ? (share >= 0.5 ? "TYT" : "AYT") : ce.TYT / total < share ? "TYT" : "AYT";
       if (share >= 1) exam = "TYT";
       if (!pool(cat, exam).length) exam = exam === "TYT" ? "AYT" : "TYT";
       let list = pool(cat, exam);
@@ -316,6 +429,7 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
           let eff = c.score / (1 + 1.5 * c.uses);
           if (days?.has(d)) eff *= 0.15; // aynı gün aynı konu olmasın
           if (c.section === prevSection) eff *= 0.6; // arka arkaya aynı ders olmasın
+          if (c.bookNext && c.uses < 2 && qLeft(c) > 0) eff *= 4; // kitaptaki ilerleme haftada en az 2 blok
           return { c, eff };
         })
         .sort((a, b) => b.eff - a.eff)[0].c;
@@ -328,6 +442,7 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
       prevCat = pick.category;
       const realExam: Exam = pick.exam === "BOTH" ? exam : pick.exam;
       counts[realExam]++;
+      catExam[pick.category][realExam]++;
       catCounts[pick.category]++;
 
       let task_type: TaskType = "soru";
@@ -342,7 +457,17 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
         target = questionsFor(pick.category, slot.dur, 0.5);
         content = "Kısa konu tekrarı, ardından soru";
       }
-      blocks.push({ ...base, subject: pick.subject, topic_id: pick.topic_id, task_type, target_questions: target, content, category: pick.category, exam: realExam, routine: false });
+      // Kitaptan sıradaki testleri bağla (konu anlatımı bloklarında değil)
+      let resource: { resource_id?: string; resource_tests?: string } = {};
+      const q = queues.get(pick.topic_id);
+      if (task_type !== "konu" && q?.length) {
+        const want = slot.dur >= 60 ? 2 : 1;
+        const rid = q[0].resource_id;
+        const take: number[] = [];
+        while (take.length < want && q.length && q[0].resource_id === rid) take.push(q.shift()!.no);
+        resource = { resource_id: rid, resource_tests: testRangeText(take) };
+      }
+      blocks.push({ ...base, subject: pick.subject, topic_id: pick.topic_id, task_type, target_questions: target, content, category: pick.category, exam: realExam, routine: false, ...resource });
     }
   }
 
@@ -351,6 +476,8 @@ export function buildTimedPlan(input: TimedPlanInput): TimedPlan {
     tasks,
     blocks,
     candidates: candidates.filter((c) => c.uses > 0),
+    // Deneme yanlışı olduğu için tekrar olarak yine programa alınanlar listeden çıkarılır
+    exhausted: exhaustedTopics(input).filter((x) => !candidates.some((c) => c.topic_id === x.topic_id)),
     pool: candidates,
     dayMinutes,
     stats: {
