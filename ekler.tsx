@@ -468,7 +468,7 @@ export function CounselorSessions({ student }: { student: Profile }) {
     return (
       <Card>
         <EmptyState icon="calendar" title="Görüşme takvimi için veritabanı güncellemesi gerekiyor">
-          Supabase → SQL Editor'de guncelleme-5.sql dosyasını bir kez çalıştırın.
+          Supabase → SQL Editor'de guncelleme-hepsi.sql dosyasını bir kez çalıştırın.
         </EmptyState>
       </Card>
     );

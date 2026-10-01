@@ -44,7 +44,7 @@ export function SharedNotesCounselor({ studentId }: { studentId: string }) {
     fetchNotes(studentId)
       .then(setNotes)
       .catch((e) => {
-        setError(missingTable(e) ? "Paylaşılan notlar için Supabase'de guncelleme-5.sql çalıştırılmalı." : errorText(e));
+        setError(missingTable(e) ? "Paylaşılan notlar için Supabase'de guncelleme-hepsi.sql çalıştırılmalı." : errorText(e));
         setNotes([]);
       });
   }, [studentId]);

@@ -80,7 +80,7 @@ export function NotificationsCard() {
       setState("on");
       toast.show("Bildirimler açıldı");
     } catch (e) {
-      toast.show(/push_subscriptions|schema cache/i.test(String((e as Error)?.message)) ? "Bildirimler için guncelleme-11.sql çalıştırılmalı" : errorText(e), "danger");
+      toast.show(/push_subscriptions|schema cache/i.test(String((e as Error)?.message)) ? "Bildirimler için guncelleme-hepsi.sql çalıştırılmalı" : errorText(e), "danger");
     } finally {
       setBusy(false);
     }

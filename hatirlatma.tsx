@@ -266,7 +266,7 @@ export function ReminderCenter() {
       setSelected(new Set());
       toast.show(sendResultText(r) + (skipped ? ` · ${skipped} kişinin kalan görevi olmadığı için atlandı` : ""));
     } catch (e) {
-      toast.show(/shared_notes|schema cache/i.test(String((e as Error)?.message)) ? "Uygulama içi not için guncelleme-6.sql çalıştırılmalı." : errorText(e), "danger");
+      toast.show(/shared_notes|schema cache/i.test(String((e as Error)?.message)) ? "Uygulama içi not için guncelleme-hepsi.sql çalıştırılmalı." : errorText(e), "danger");
     } finally {
       setBusy(false);
     }

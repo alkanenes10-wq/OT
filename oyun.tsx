@@ -122,7 +122,7 @@ export function monthGoals(s: GameStats): MonthGoal[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Özel günler (guncelleme-14.sql → special_days() ile aynı liste)      */
+/* Özel günler (guncelleme-hepsi.sql → special_days() ile aynı liste)      */
 /* ------------------------------------------------------------------ */
 export const OZEL_GUNLER: { md: string; name: string; short: string }[] = [
   { md: "01-01", name: "Yeni Yıl", short: "1 Ocak" },
@@ -921,7 +921,7 @@ function MonthGoalEditor({ studentId, stats, onSaved }: { studentId: string; sta
         ? await sb().from("monthly_goals").delete().eq("student_id", studentId).eq("month", month)
         : await sb().from("monthly_goals").upsert({ student_id: studentId, month, questions: qn, active_days: dn, updated_at: new Date().toISOString() }, { onConflict: "student_id,month" });
     setBusy(false);
-    if (res.error) return toast.show("Kaydedilemedi: guncelleme-14.sql çalıştırıldı mı?", "danger");
+    if (res.error) return toast.show("Kaydedilemedi: guncelleme-hepsi.sql çalıştırıldı mı?", "danger");
     if (reset) {
       setQ("");
       setD("");

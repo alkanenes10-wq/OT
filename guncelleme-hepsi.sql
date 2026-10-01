@@ -1,4 +1,13 @@
 -- =====================================================================
+--  YKS Takip — TÜM GÜNCELLEMELER TEK DOSYADA
+--  Hangi güncellemeleri çalıştırdığınızı bilmiyorsanız yalnızca bu dosyayı çalıştırın.
+--  Supabase → SQL Editor → New query → bu dosyanın TAMAMINI yapıştırın → Run.
+--  "destructive operation" uyarısı çıkarsa "Run this query" deyin: yalnızca kuralları
+--  (policy) ve fonksiyonları yeniden kurar; öğrenci, program, günlük vb. VERİLER SİLİNMEZ.
+--  İstediğiniz kadar tekrar çalıştırabilirsiniz.
+-- =====================================================================
+
+-- =====================================================================
 --  YKS Takip — Supabase veritabanı şeması
 --  Supabase → SQL Editor → New query → bu dosyanın TAMAMINI yapıştırıp
 --  "Run" deyin. Dosya tekrar çalıştırılabilir (mevcut verileri silmez).

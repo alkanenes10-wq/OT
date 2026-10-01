@@ -315,7 +315,7 @@ export function ParentLinksCard({ studentId, studentName }: { studentId: string;
     `Merhaba, ${studentName.split(" ")[0]}'in haftalık programını, deneme netlerini ve çalışma grafiklerini bu bağlantıdan takip edebilirsiniz (giriş gerekmez, yalnızca görüntüleme): ${urlOf(r.token)}`;
   const waHref = (r: LinkRow) => waTo(phone, message(r));
 
-  if (missing) return <Card title="Veli bağlantısı"><p className="text-sm text-muted">Veli bağlantısı için Supabase&apos;de guncelleme-11.sql çalıştırılmalı.</p></Card>;
+  if (missing) return <Card title="Veli bağlantısı"><p className="text-sm text-muted">Veli bağlantısı için Supabase&apos;de guncelleme-hepsi.sql çalıştırılmalı.</p></Card>;
   if (!rows) return null;
   const active = rows.filter((r) => !r.revoked_at);
 

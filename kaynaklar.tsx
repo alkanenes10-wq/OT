@@ -30,7 +30,7 @@ export function topicsForSubject(subject: string) {
 }
 
 const missingTable = (e: unknown) => /resources|resource_progress|schema cache|does not exist/i.test(String((e as Error)?.message ?? e));
-const SQL_HINT = "Kaynak takibi için Supabase'de guncelleme-8.sql çalıştırılmalı.";
+const SQL_HINT = "Kaynak takibi için Supabase'de guncelleme-hepsi.sql çalıştırılmalı.";
 
 export async function fetchResources(studentId: string): Promise<Resource[]> {
   const { data, error } = await sb().from("resources").select("*").eq("student_id", studentId).order("created_at", { ascending: false });

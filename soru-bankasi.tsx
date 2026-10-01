@@ -152,7 +152,7 @@ export function QuestionBank({ studentId, audience }: { studentId: string; audie
     return (
       <Card>
         <EmptyState icon="book" title="Soru bankası için veritabanı güncellemesi gerekiyor">
-          {audience === "counselor" ? "Supabase → SQL Editor'de guncelleme-5.sql dosyasını bir kez çalıştırın." : "Danışmanın kurulumu tamamladığında burada sorularını saklayabileceksin."}
+          {audience === "counselor" ? "Supabase → SQL Editor'de guncelleme-hepsi.sql dosyasını bir kez çalıştırın." : "Danışmanın kurulumu tamamladığında burada sorularını saklayabileceksin."}
         </EmptyState>
       </Card>
     );

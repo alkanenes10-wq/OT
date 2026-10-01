@@ -12,7 +12,7 @@ import { Badge, Button, Card, EmptyState, ErrorBox, Field, Icon, Modal, PageLoad
 
 const BUCKET = "sorular";
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
-const SQL_HINT = "Ortak soru forumu için Supabase'de guncelleme-9.sql çalıştırılmalı.";
+const SQL_HINT = "Ortak soru forumu için Supabase'de guncelleme-hepsi.sql çalıştırılmalı.";
 const missing = (e: unknown) => /forum_|schema cache|does not exist|Could not find the function/i.test(String((e as Error)?.message ?? e));
 
 type Post = { id: string; subject: string; topic_id: string | null; note: string; image_path: string; status: string; solved: boolean; created_at: string; answer_count: number; mine: boolean };

@@ -85,7 +85,7 @@ export function AppearanceCard() {
       const missing = /set_my_theme|schema cache|does not exist|function/i.test(error.message);
       setWarn(
         missing
-          ? "Seçim bu cihazda uygulandı. Diğer cihazlarda da görünmesi için danışmanın Supabase'de guncelleme-7.sql dosyasını çalıştırmalı."
+          ? "Seçim bu cihazda uygulandı. Diğer cihazlarda da görünmesi için danışmanın Supabase'de guncelleme-hepsi.sql dosyasını çalıştırmalı."
           : errorText(error),
       );
       if (!missing) toast.show(errorText(error), "danger");

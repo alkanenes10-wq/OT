@@ -120,7 +120,7 @@ export function CounselorCalendar() {
         <PageHeader title="Takvim" />
         <Card>
           <EmptyState icon="calendar" title="Takvim için veritabanı güncellemesi gerekiyor">
-            Supabase → SQL Editor'de guncelleme-5.sql dosyasını bir kez çalıştırın.
+            Supabase → SQL Editor'de guncelleme-hepsi.sql dosyasını bir kez çalıştırın.
           </EmptyState>
         </Card>
       </>

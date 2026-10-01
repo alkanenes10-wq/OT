@@ -12,7 +12,7 @@ import { Badge, Button, Card, EmptyState, ErrorBox, Field, IconButton, Modal, Pa
 
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
 const kindLabel = (k: ResourceKind) => RESOURCE_KINDS.find((x) => x.value === k)?.label ?? k;
-export const CATALOG_SQL_HINT = "Kaynak kataloğu için Supabase'de guncelleme-10.sql çalıştırılmalı.";
+export const CATALOG_SQL_HINT = "Kaynak kataloğu için Supabase'de guncelleme-hepsi.sql çalıştırılmalı.";
 const missing = (e: unknown) => /resource_catalog|catalog_id|schema cache|does not exist/i.test(String((e as Error)?.message ?? e));
 const trLower = (s: string) => s.toLocaleLowerCase("tr-TR");
 

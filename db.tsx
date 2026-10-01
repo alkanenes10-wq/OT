@@ -47,9 +47,9 @@ export function errorText(err: unknown): string {
   if (/row-level security|permission denied/i.test(msg)) return "Bu işlem için yetkiniz yok.";
   if (/duplicate key|unique/i.test(msg)) return "Bu kayıt zaten mevcut.";
   if (/JWT expired|jwt/i.test(msg)) return "Oturum süresi doldu, lütfen tekrar giriş yapın.";
-  if (/Bucket not found/i.test(msg)) return "Karne deposu yok: Supabase → SQL Editor'de guncelleme-2.sql dosyasını çalıştırın.";
+  if (/Bucket not found/i.test(msg)) return "Karne deposu yok: Supabase → SQL Editor'de guncelleme-hepsi.sql dosyasını çalıştırın.";
   if (/schema cache|does not exist|Could not find the (table|column)/i.test(msg))
-    return "Veritabanı güncel değil: Supabase → SQL Editor'de guncelleme-2.sql dosyasını çalıştırın. (" + msg.slice(0, 120) + ")";
+    return "Veritabanı güncel değil: Supabase → SQL Editor'de guncelleme-hepsi.sql dosyasını bir kez çalıştırın. (" + msg.slice(0, 120) + ")";
   return msg;
 }
 

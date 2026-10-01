@@ -47,6 +47,11 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncellemeleri tek seferde yapmak (önerilen)
+
+Hangi `guncelleme-X.sql` dosyalarını çalıştırdığınızdan emin değilseniz ya da uygulamada "Veritabanı güncel değil", "… çalıştırılmalı" uyarısı görüyorsanız:
+Supabase → SQL Editor → New query → `guncelleme-hepsi.sql` dosyasının **tamamını** yapıştırın → **Run**. "Destructive operation" uyarısı çıkarsa "Run this query" deyin. Yalnızca eksik tabloları ekler, kuralları ve fonksiyonları yeniler; verileriniz silinmez. Tekrar çalıştırmak güvenlidir.
+
 ## Güncelleme 3.2 — görev panosu, görüşme raporu, kazanımlar, rehber videoları
 
 Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-15.sql` → **Run**. Yeni dosyalar: `kazanimlar.ts`, `konu-bilgi.tsx`, `gorev-panosu.tsx`, `gorusme-raporu.tsx`, `videolar.tsx`.

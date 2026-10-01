@@ -1,6 +1,6 @@
 "use client";
 // Rehber videoları: erteleme, sınav kaygısı, zaman yönetimi gibi konularda danışmanın eklediği YouTube videoları.
-// • Danışman bağlantıyı yapıştırır, başlık ve kategori seçer (guide_videos tablosu, guncelleme-15.sql).
+// • Danışman bağlantıyı yapıştırır, başlık ve kategori seçer (guide_videos tablosu, guncelleme-hepsi.sql).
 // • Öğrenci "Videolar" sayfasında izler; son 3 günün günlüğüne göre ilgili videolar "Senin için" olarak önerilir.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -292,7 +292,7 @@ export function CounselorVideos() {
     const sort = (videos ?? []).filter((v) => v.category === category).length;
     const { error: e } = await sb().from("guide_videos").insert({ category, title: title.trim().slice(0, 150), youtube_id: parsed.id, start_sec: parsed.start, sort });
     setBusy(false);
-    if (e) return toast.show(/guide_videos/.test(e.message) ? "Önce guncelleme-15.sql çalıştırılmalı" : errorText(e), "danger");
+    if (e) return toast.show(/guide_videos/.test(e.message) ? "Önce guncelleme-hepsi.sql çalıştırılmalı" : errorText(e), "danger");
     setUrl("");
     setTitle("");
     toast.show("Video eklendi");
@@ -330,7 +330,7 @@ export function CounselorVideos() {
           Öğrenciler videoları kendi &quot;Videolar&quot; sayfasında izler. Günlüğünde erteleme, plan değişikliği, yüksek kaygı, düşük motivasyon, kısa uyku ya da uzun telefon süresi işaretleyen öğrenciye ilgili kategorideki videolar ana ekranında önerilir.
         </p>
       </div>
-      {error && <ErrorBox>{/guide_videos/.test(error) ? "Video tablosu bulunamadı: Supabase'de guncelleme-15.sql dosyasını bir kez çalıştırın." : error}</ErrorBox>}
+      {error && <ErrorBox>{/guide_videos/.test(error) ? "Video tablosu bulunamadı: Supabase'de guncelleme-hepsi.sql dosyasını bir kez çalıştırın." : error}</ErrorBox>}
 
       <Card title="Video ekle">
         <div className="grid gap-3 sm:grid-cols-2">
