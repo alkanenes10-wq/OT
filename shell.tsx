@@ -184,6 +184,7 @@ export function CounselorShell({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth();
   const settings = route.v === "ayarlar";
   const calendar = route.v === "takvim";
+  const remind = route.v === "hatirlatma";
   const link = (active: boolean) =>
     cx("hidden rounded-lg px-3 py-1.5 text-sm font-medium transition sm:inline-flex", active ? "bg-primary-soft text-primary-ink" : "text-muted hover:text-fg");
   const side = (active: boolean) =>
@@ -206,11 +207,14 @@ export function CounselorShell({ children }: { children: ReactNode }) {
         </A>
         <nav className="flex flex-col gap-1" aria-label="Ana menü">
           <p className="eyebrow px-3 pb-1">Menü</p>
-          <A to={{}} className={side(!settings && !calendar)}>
+          <A to={{}} className={side(!settings && !calendar && !remind)}>
             <Icon name="users" size={18} /> Öğrenciler
           </A>
           <A to={{ v: "takvim" }} className={side(calendar)}>
             <Icon name="calendar" size={18} /> Takvim
+          </A>
+          <A to={{ v: "hatirlatma" }} className={side(remind)}>
+            <Icon name="bell" size={18} /> Hatırlatma
           </A>
           <A to={{ v: "ayarlar" }} className={side(settings)}>
             <Icon name="settings" size={18} /> Ayarlar
@@ -235,11 +239,14 @@ export function CounselorShell({ children }: { children: ReactNode }) {
               <Logo />
             </A>
             <div className="flex items-center gap-1">
-              <A to={{}} className={link(!settings && !calendar)}>
+              <A to={{}} className={link(!settings && !calendar && !remind)}>
                 Öğrenciler
               </A>
               <A to={{ v: "takvim" }} className={link(calendar)}>
                 Takvim
+              </A>
+              <A to={{ v: "hatirlatma" }} className={link(remind)}>
+                Hatırlatma
               </A>
               <A to={{ v: "ayarlar" }} className={link(settings)}>
                 Ayarlar

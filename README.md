@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-7.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-8.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,16 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 2.4 — hatırlatma merkezi, konu başarı analizi, kaynak takibi
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-8.sql` → **Run**. Yeni dosyalar: `hatirlatma.tsx`, `konu-analizi.tsx`, `kaynaklar.tsx`.
+
+- **Hatırlatma (sol menü):** bugün görevi eksik / günlüğü yok / 3+ gündür kayıt yok / programsız öğrenciler. Şablondaki {ad}, {kalan}, {gorevler}, {haftalik}, {son_gunluk} her öğrencinin verisiyle dolar. WhatsApp'ta aç (telefon kayıtlıysa doğrudan o kişide), tek tıkla uygulama içi not veya seçilenlere toplu not. "Sıradaki" düğmesi gönderilmemiş bir sonraki öğrenciyi açar.
+- **Öğrenci → Hesap → İletişim:** öğrenci ve veli telefonu (yalnızca danışman görür).
+- **Konular → Başarı analizi:** derslere göre doğru oranı, öncelikli 10 konu (düşük doğru oranı + deneme yanlışları + son haftalardaki düşüş), son 8 haftanın konu × hafta tablosu.
+- **Konular → Kaynaklar:** öğrencinin kitapları, test test ilerleme ve doğru oranı, kitapta zorlanılan konular. Program görevine kaynak + test numarası (ör. 12-14) bağlanabilir; görev tamamlanınca testler kendiliğinden işaretlenir.
+- **Görev satırları:** öğrenci "Çözdüğüm"ün altında doğru / yanlış sayısını da girebilir (analizin temeli).
 
 ## Güncelleme 2.3 — çizgi grafik ve kişisel renk paleti
 

@@ -2,6 +2,7 @@
 // v1.9 eklemeleri: YKS geri sayımı, 5 dakika başlama modu, akşam hatırlatması,
 // telefona günlük hatırlatıcı (.ics), WhatsApp hatırlatma şablonları ve görüşme takvimi.
 
+import { normalizePhone, waTo } from "./hatirlatma";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText, fetchLogs, fetchPlans, sb } from "./db";
 import { addDays, diffDays, formatLong, isRealTask, pickCurrentPlan, type PlanTask, type Profile, todayISO } from "./lib";
@@ -604,6 +605,7 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [ctx, setCtx] = useState<{ lastLog: string | null; done: number; total: number; next: CounselingSession | null } | null>(null);
+  const [phone, setPhone] = useState<string>("");
   const [kind, setKind] = useState<"gunluk" | "program" | "destek" | "gorusme">("gunluk");
   const [text, setText] = useState("");
   const first = student.full_name.split(" ")[0];
@@ -618,6 +620,8 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
         const { data } = await sb().from("plan_tasks").select("*").eq("plan_id", plan.id);
         tasks = ((data ?? []) as PlanTask[]).filter(isRealTask);
       }
+      const { data: ct } = await sb().from("student_contacts").select("phone").eq("student_id", student.id).maybeSingle();
+      setPhone((ct as { phone?: string } | null)?.phone ?? "");
       const { data: ss } = await sb().from("counseling_sessions").select("*").eq("student_id", student.id).eq("status", "planned").gte("starts_at", new Date().toISOString()).order("starts_at").limit(1);
       setCtx({ lastLog: logs[0]?.log_date ?? null, done: tasks.filter((t) => t.done).length, total: tasks.length, next: ((ss ?? []) as CounselingSession[])[0] ?? null });
     })();
@@ -670,7 +674,7 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
             >
               Kopyala
             </Button>
-            <a href={waLink(text)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[15px] font-medium text-primary-fg">
+            <a href={waTo(phone, text)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[15px] font-medium text-primary-fg">
               <Icon name="message" size={17} /> WhatsApp'ta aç
             </a>
           </>
@@ -693,7 +697,7 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
               ]}
             />
             <textarea className="field min-h-36 text-sm" value={text} onChange={(e) => setText(e.target.value)} aria-label="Mesaj" />
-            <p className="text-xs text-faint">Mesaj öğrencinin kendi verisinden hazırlandı; göndermeden önce düzenleyebilirsin. WhatsApp'ta kişiyi sen seçersin.</p>
+            <p className="text-xs text-faint">Mesaj öğrencinin kendi verisinden hazırlandı; göndermeden önce düzenleyebilirsin. {normalizePhone(phone) ? `WhatsApp ${phone} numarasında açılır.` : "Telefon kayıtlı değilse WhatsApp'ta kişiyi sen seçersin (Hesap sekmesinden ekleyebilirsin)."}</p>
           </div>
         )}
       </Modal>

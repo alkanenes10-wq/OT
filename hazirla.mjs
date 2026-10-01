@@ -39,6 +39,9 @@ const APP_FILES = [
   "soru-bankasi.tsx",
   "takvim.tsx",
   "theme.tsx",
+  "kaynaklar.tsx",
+  "konu-analizi.tsx",
+  "hatirlatma.tsx",
 ];
 
 mkdirSync("app", { recursive: true });

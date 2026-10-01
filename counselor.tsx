@@ -1,6 +1,7 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { ReminderCenter, StudentContactCard } from "./hatirlatma";
 import { AppearanceCard } from "./theme";
 import { CounselorSessions, WhatsAppReminder } from "./ekler";
 import { ParentReport } from "./veli-raporu";
@@ -20,7 +21,7 @@ import { CounselorTeam, TransferStudent } from "./team";
 import { SupportInbox, SupportPanel } from "./support";
 import { SharedNotesCounselor } from "./notes";
 import { PageHeader } from "./shell";
-import { TopicTracker } from "./topics";
+import { TopicsHub } from "./konu-analizi";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast, type IconName } from "./ui";
 
 /* ---------------- Danışman notları (öğrenci göremez) ---------------- */
@@ -806,7 +807,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         )}
         {tab === "konular" && (
           <div className="max-w-3xl">
-            <TopicTracker studentId={student.id} studentName={student.full_name} />
+            <TopicsHub studentId={student.id} studentName={student.full_name} />
           </div>
         )}
         {tab === "sorular" && (
@@ -832,7 +833,10 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         )}
         {tab === "hesap" && (
           <div className="max-w-3xl">
-            <StudentAccount student={student} onChanged={load} />
+            <div className="space-y-4">
+              <StudentContactCard studentId={student.id} />
+              <StudentAccount student={student} onChanged={load} />
+            </div>
           </div>
         )}
       </div>
@@ -895,6 +899,7 @@ export function CounselorApp() {
   if (route.v === "yeni") return <NewStudent />;
   if (route.v === "ayarlar") return <CounselorSettings />;
   if (route.v === "takvim") return <CounselorCalendar />;
+  if (route.v === "hatirlatma") return <ReminderCenter />;
   if (route.v === "ogrenci" && route.id) return <StudentDetail key={route.id} id={route.id} tab={route.t} />;
   return <StudentList />;
 }

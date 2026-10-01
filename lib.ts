@@ -57,6 +57,8 @@ export type PlanTask = {
   sort: number;
   start_time: string | null; // "17:00" — saatli programlarda blok başlangıcı
   duration_min: number | null;
+  resource_id?: string | null; // bağlı kaynak (kitap) — guncelleme-8.sql
+  resource_tests?: string | null; // "12-14" gibi test numaraları
 };
 
 /* ------------------------------------------------------------------ */
@@ -700,3 +702,52 @@ export function pickCurrentPlan<T extends { start_date: string }>(plans: T[], to
 /* Kişisel görünüm (theme.tsx). Sayfa açılırken React yüklenmeden çalışan küçük betik — layout.tsx kullanır. */
 export const THEME_STORAGE_KEY = "yks-gorunum";
 export const THEME_BOOT_SCRIPT = `try{var t=JSON.parse(localStorage.getItem("yks-gorunum")||"{}"),r=document.documentElement;if(t.a&&t.a!=="petrol")r.dataset.accent=t.a;if(t.m==="light"||t.m==="dark")r.dataset.mode=t.m}catch(e){}`;
+
+/* ------------------------------------------------------------------ */
+/* Kaynak (kitap) takibi — kaynaklar.tsx, guncelleme-8.sql              */
+/* ------------------------------------------------------------------ */
+export type ResourceKind = "soru_bankasi" | "konu_anlatim" | "fasikul" | "deneme" | "diger";
+export const RESOURCE_KINDS: { value: ResourceKind; label: string }[] = [
+  { value: "soru_bankasi", label: "Soru bankası" },
+  { value: "fasikul", label: "Fasikül" },
+  { value: "konu_anlatim", label: "Konu anlatımı" },
+  { value: "deneme", label: "Deneme kitabı" },
+  { value: "diger", label: "Diğer" },
+];
+export type Resource = {
+  id: string;
+  student_id: string;
+  title: string;
+  publisher: string;
+  subject: string;
+  kind: ResourceKind;
+  total_tests: number;
+  status: "active" | "done" | "paused";
+  created_at: string;
+};
+export type ResourceProgress = {
+  id: string;
+  resource_id: string;
+  student_id: string;
+  test_no: number;
+  topic_id: string | null;
+  correct: number | null;
+  wrong: number | null;
+  empty: number | null;
+  done_on: string;
+  task_id: string | null;
+};
+/** "12-14, 18" → [12, 13, 14, 18] */
+export function parseTestList(s: string | null | undefined): number[] {
+  const out: number[] = [];
+  for (const part of (s ?? "").split(",")) {
+    const p = part.trim();
+    const m = p.match(/^(\d{1,4})\s*-\s*(\d{1,4})$/);
+    if (m) {
+      const a = +m[1];
+      const b = +m[2];
+      if (b >= a && b - a < 60) for (let n = a; n <= b; n++) out.push(n);
+    } else if (/^\d{1,4}$/.test(p)) out.push(+p);
+  }
+  return out.filter((n) => n >= 1 && n <= 1000);
+}

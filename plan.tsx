@@ -39,10 +39,13 @@ import {
   type TimeBlock,
   type TopicProgress,
   type WeeklyPlan,
+  parseTestList,
+  type Resource,
 } from "./lib";
 import { CopyDaysModal } from "./ekler";
 import { buildCandidates, buildTimedPlan, type Candidate, type DraftTask, type HistoryTask } from "./planner";
 import { CalendarView } from "./calendar";
+import { fetchResources, resourceLabel, TaskResourceLine } from "./kaynaklar";
 import {
   Badge,
   Button,
@@ -223,6 +226,14 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
     }
   }
 
+  async function patchResult(t: PlanTask, patch: Partial<PlanTask>) {
+    try {
+      replace(await patchTask(t.id, patch));
+    } catch (e) {
+      toast.show(errorText(e), "danger");
+    }
+  }
+
   async function saveTask(draft: Partial<PlanTask>) {
     if (!plan) return;
     const payload = {
@@ -238,6 +249,10 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
       done: draft.done ?? false,
       start_time: draft.start_time || null,
       duration_min: draft.duration_min && draft.duration_min >= 5 ? draft.duration_min : null,
+      // Kaynak bağlantısı yalnızca guncelleme-8.sql çalıştırıldıysa gönderilir
+      ...(draft.resource_id !== undefined
+        ? { resource_id: draft.resource_id || null, resource_tests: draft.resource_id ? (draft.resource_tests ?? "").trim().slice(0, 40) || null : null }
+        : {}),
     };
     const q = draft.id
       ? sb().from("plan_tasks").update(payload).eq("id", draft.id)
@@ -391,6 +406,7 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
               studentId={studentId}
               onToggle={toggle}
               onSolved={setSolved}
+              onPatch={patchResult}
               onEdit={(t) => setEditing(t)}
               onAdd={(d) => setEditing({ day_index: d, subject: "TÜRKÇE", task_type: "soru" })}
               onLevel={setLevel}
@@ -702,6 +718,7 @@ function DayView({
   studentId,
   onToggle,
   onSolved,
+  onPatch,
   onEdit,
   onAdd,
   onLevel,
@@ -715,6 +732,7 @@ function DayView({
   studentId: string;
   onToggle: (t: PlanTask) => void;
   onSolved: (t: PlanTask, n: number | null) => void;
+  onPatch: (t: PlanTask, patch: Partial<PlanTask>) => void;
   onEdit: (t: PlanTask) => void;
   onAdd: (d: number) => void;
   onLevel: (d: number, l: DayLevel) => void;
@@ -785,7 +803,7 @@ function DayView({
           <ul className="-mx-1 mt-2 divide-y divide-line">
             {dayTasks.map((t) => (
               <li key={t.id}>
-                <TaskRow task={t} onToggle={onToggle} onSolved={onSolved} onEdit={onEdit} />
+                <TaskRow task={t} onToggle={onToggle} onSolved={onSolved} onEdit={onEdit} onPatch={onPatch} />
               </li>
             ))}
           </ul>
@@ -816,14 +834,31 @@ export function TaskRow({
   onToggle,
   onSolved,
   onEdit,
+  onPatch,
 }: {
   task: PlanTask;
   onToggle: (t: PlanTask) => void;
   onSolved: (t: PlanTask, n: number | null) => void;
   onEdit?: (t: PlanTask) => void;
+  /** Doğru / yanlış sayısını kaydeder (konu başarı analizi için) */
+  onPatch?: (t: PlanTask, patch: Partial<PlanTask>) => void;
 }) {
   const [value, setValue] = useState(task.solved != null ? String(task.solved) : "");
   useEffect(() => setValue(task.solved != null ? String(task.solved) : ""), [task.solved]);
+  const [dc, setDc] = useState(task.correct != null ? String(task.correct) : "");
+  const [dw, setDw] = useState(task.wrong != null ? String(task.wrong) : "");
+  useEffect(() => setDc(task.correct != null ? String(task.correct) : ""), [task.correct]);
+  useEffect(() => setDw(task.wrong != null ? String(task.wrong) : ""), [task.wrong]);
+  const commitDY = () => {
+    if (!onPatch) return;
+    const c = dc.trim() === "" ? null : Math.min(2000, Number(dc));
+    const w = dw.trim() === "" ? null : Math.min(2000, Number(dw));
+    if (c === task.correct && w === task.wrong) return;
+    const patch: Partial<PlanTask> = { correct: c, wrong: w };
+    // Çözülen sayı girilmemişse doğru + yanlış kadar say
+    if (task.solved == null && (c != null || w != null)) patch.solved = (c ?? 0) + (w ?? 0);
+    onPatch(task, patch);
+  };
   const showSolved = task.task_type === "soru" || task.task_type === "deneme" || task.target_questions != null;
   const commit = () => {
     const n = value.trim() === "" ? null : Math.min(2000, Math.max(0, Math.round(Number(value))));
@@ -857,6 +892,7 @@ export function TaskRow({
         </div>
         <p className={cx("text-[15px] leading-snug", task.done && "text-faint line-through")}>{taskTitle(task)}</p>
         {task.topic_id && task.content.trim() && <p className="text-xs text-muted">{task.content}</p>}
+        <TaskResourceLine task={task} />
         {showSolved && (
           <div className="mt-1.5 flex items-center gap-2 text-sm">
             <label className="text-xs text-muted" htmlFor={`solved-${task.id}`}>
@@ -873,6 +909,32 @@ export function TaskRow({
               placeholder="0"
             />
             {task.target_questions ? <span className="text-xs text-muted tabular">/ {task.target_questions} soru</span> : <span className="text-xs text-muted">soru</span>}
+          </div>
+        )}
+        {showSolved && onPatch && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-sm">
+            <span className="text-xs text-muted">Doğru</span>
+            <input
+              aria-label="Doğru sayısı"
+              inputMode="numeric"
+              className="field h-8 w-14 px-1.5 py-1 text-center text-sm tabular"
+              value={dc}
+              onChange={(e) => setDc(e.target.value.replace(/[^\d]/g, ""))}
+              onBlur={commitDY}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder="–"
+            />
+            <span className="ml-1 text-xs text-muted">Yanlış</span>
+            <input
+              aria-label="Yanlış sayısı"
+              inputMode="numeric"
+              className="field h-8 w-14 px-1.5 py-1 text-center text-sm tabular"
+              value={dw}
+              onChange={(e) => setDw(e.target.value.replace(/[^\d]/g, ""))}
+              onBlur={commitDY}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder="–"
+            />
           </div>
         )}
       </div>
@@ -912,6 +974,14 @@ function TaskEditor({
   const num = (v: string) => (v.trim() === "" ? null : Math.min(2000, Math.max(0, Math.round(Number(v.replace(/[^\d]/g, "")) || 0))));
   const [sugs, setSugs] = useState<Candidate[] | null>(null);
   const [sugBusy, setSugBusy] = useState(false);
+  const [resources, setResources] = useState<Resource[]>([]);
+  useEffect(() => {
+    fetchResources(studentId)
+      .then((rs) => setResources(rs.filter((r) => r.status !== "done" || r.id === task.resource_id)))
+      .catch(() => setResources([]));
+  }, [studentId, task.resource_id]);
+  const subjectResources = [...resources].sort((a, b) => Number(b.subject === subject) - Number(a.subject === subject));
+  const linkedTests = parseTestList(t.resource_tests);
 
   /** Aynı dersten öncelikli (deneme yanlışı, kronik eksik, sıradaki konu…) başka konular önerir */
   async function suggest() {
@@ -1088,6 +1158,46 @@ function TaskEditor({
                   <span className="block text-[11px] text-muted">{c.reasons[0] ?? ""}</span>
                 </button>
               ))}
+            </div>
+          </Field>
+        )}
+        {resources.length > 0 && (
+          <Field
+            label="Kaynak (isteğe bağlı)"
+            htmlFor="te-res"
+            hint={
+              t.resource_id
+                ? linkedTests.length
+                  ? `Görev tamamlanınca ${linkedTests.length === 1 ? `test ${linkedTests[0]}` : `${linkedTests.length} test`} kaynakta “çözüldü” olur${linkedTests.length === 1 ? "; doğru/yanlış da teste yazılır" : ""}.`
+                  : "Test numarası yazın: 12 · 12-14 · 12, 15"
+                : undefined
+            }
+          >
+            <div className="flex gap-2">
+              <select
+                id="te-res"
+                className="field min-w-0 flex-1"
+                value={t.resource_id ?? ""}
+                onChange={(e) => set({ resource_id: e.target.value || null, resource_tests: e.target.value ? t.resource_tests ?? "" : null })}
+              >
+                <option value="">— Kaynak yok —</option>
+                {subjectResources.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {resourceLabel(r)}
+                    {r.subject && r.subject !== subject ? ` (${r.subject})` : ""}
+                  </option>
+                ))}
+              </select>
+              {t.resource_id && (
+                <input
+                  aria-label="Test numaraları"
+                  className="field w-28"
+                  value={t.resource_tests ?? ""}
+                  maxLength={40}
+                  placeholder="Test 12-14"
+                  onChange={(e) => set({ resource_tests: e.target.value.replace(/[^\d,\s-]/g, "") })}
+                />
+              )}
             </div>
           </Field>
         )}

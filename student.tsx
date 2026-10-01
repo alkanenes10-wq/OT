@@ -15,7 +15,7 @@ import { QuestionBank, QuestionBankTeaser } from "./soru-bankasi";
 import { StudentSupport } from "./support";
 import { StudentNotes } from "./notes";
 import { InstallHint, PageHeader } from "./shell";
-import { TopicTracker } from "./topics";
+import { TopicsHub } from "./konu-analizi";
 import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, ProgressBar, useToast } from "./ui";
 
 function Today() {
@@ -71,6 +71,14 @@ function Today() {
       const row = await patchTask(t.id, { solved });
       replace(row);
       if (row.done && !t.done) toast.show("Hedefe ulaştın, görev tamamlandı!");
+    } catch (e) {
+      toast.show(errorText(e), "danger");
+    }
+  }
+
+  async function patchResult(t: PlanTask, patch: Partial<PlanTask>) {
+    try {
+      replace(await patchTask(t.id, patch));
     } catch (e) {
       toast.show(errorText(e), "danger");
     }
@@ -142,7 +150,7 @@ function Today() {
             <ul className="-mx-1 mt-2 divide-y divide-line">
               {todayTasks.map((t) => (
                 <li key={t.id}>
-                  <TaskRow task={t} onToggle={toggle} onSolved={setSolved} />
+                  <TaskRow task={t} onToggle={toggle} onSolved={setSolved} onPatch={patchResult} />
                 </li>
               ))}
             </ul>
@@ -261,8 +269,8 @@ function Topics() {
   if (!profile) return null;
   return (
     <>
-      <PageHeader title="Konu takibi" />
-      <TopicTracker studentId={profile.id} studentName={profile.full_name} />
+      <PageHeader title="Konular" />
+      <TopicsHub studentId={profile.id} studentName={profile.full_name} />
     </>
   );
 }
