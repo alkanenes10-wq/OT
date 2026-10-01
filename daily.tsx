@@ -4,6 +4,8 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { errorText, fetchLogs, sb } from "./db";
 import { addDays, type DailyLog, dayShort, downloadCSV, fmtNum, formatLong, formatShort, formatTR, todayISO, yesNo } from "./lib";
+import { dayNotes, type DayNote } from "./degiskenler";
+import { DayFeedback, VarHelp } from "./rehber";
 import { Badge, Button, Card, cx, EmptyState, ErrorBox, Field, Icon, IconButton, PageLoader, ScalePicker, Segmented, useToast } from "./ui";
 
 type FormState = {
@@ -57,13 +59,27 @@ const YES_NO = [
 ];
 
 /** Günlük takip formu (şablondaki 2. sayfa) */
-export function DailyLogForm({ studentId, date, onSaved }: { studentId: string; date: string; onSaved?: (l: DailyLog) => void }) {
+export function DailyLogForm({
+  studentId,
+  date,
+  onSaved,
+  history = [],
+  audience = "student",
+}: {
+  studentId: string;
+  date: string;
+  onSaved?: (l: DailyLog) => void;
+  /** Öğrencinin geçmiş kayıtları: açıklamalar ve kayıt sonrası geri bildirim için */
+  history?: DailyLog[];
+  audience?: "student" | "counselor";
+}) {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [existing, setExisting] = useState<DailyLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<DayNote[] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -117,6 +133,7 @@ export function DailyLogForm({ studentId, date, onSaved }: { studentId: string; 
     if (error) return setError(errorText(error));
     const l = data as DailyLog;
     setExisting(l);
+    setFeedback(dayNotes(l, [...history.filter((h) => h.log_date !== l.log_date), l]));
     toast.show("Günlük kaydedildi");
     onSaved?.(l);
   }
@@ -160,11 +177,17 @@ export function DailyLogForm({ studentId, date, onSaved }: { studentId: string; 
               />
             </Field>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <VarHelp k="sleep_hours" logs={history} audience={audience} />
+            <VarHelp k="phone_minutes" logs={history} audience={audience} />
+          </div>
           <Field label="Erteleme yaşadım mı?">
             <Segmented ariaLabel="Erteleme" options={YES_NO} value={form.procrastinated} onChange={(v) => set("procrastinated", form.procrastinated === v ? null : v)} />
+            <VarHelp k="procrastinated" logs={history} audience={audience} />
           </Field>
           <Field label="Gün içinde planı yeniden düzenledin mi?">
             <Segmented ariaLabel="Plan değişikliği" options={YES_NO} value={form.replanned} onChange={(v) => set("replanned", form.replanned === v ? null : v)} />
+            <VarHelp k="replanned" logs={history} audience={audience} />
           </Field>
         </div>
       </Card>
@@ -173,12 +196,15 @@ export function DailyLogForm({ studentId, date, onSaved }: { studentId: string; 
         <div className="space-y-5">
           <Field label="Kaygı">
             <ScalePicker ariaLabel="Kaygı" value={form.anxiety} onChange={(v) => set("anxiety", v)} low="Çok az" high="Çok fazla" />
+            <VarHelp k="anxiety" logs={history} audience={audience} />
           </Field>
           <Field label="Enerji">
             <ScalePicker ariaLabel="Enerji" value={form.energy} onChange={(v) => set("energy", v)} low="Çok düşük" high="Çok yüksek" />
+            <VarHelp k="energy" logs={history} audience={audience} />
           </Field>
           <Field label="Motivasyon">
             <ScalePicker ariaLabel="Motivasyon" value={form.motivation} onChange={(v) => set("motivation", v)} low="Çok düşük" high="Çok yüksek" />
+            <VarHelp k="motivation" logs={history} audience={audience} />
           </Field>
         </div>
       </Card>
@@ -208,6 +234,7 @@ export function DailyLogForm({ studentId, date, onSaved }: { studentId: string; 
       </Card>
 
       {error && <ErrorBox>{error}</ErrorBox>}
+      {feedback && <DayFeedback notes={feedback} audience={audience} onClose={() => setFeedback(null)} />}
       <div className="flex items-center justify-between gap-3">
         {existing ? (
           <Button variant="ghost" size="sm" icon="trash" onClick={remove}>
@@ -225,7 +252,7 @@ export function DailyLogForm({ studentId, date, onSaved }: { studentId: string; 
 }
 
 /** Tarih seçici + form + geçmiş (öğrenci ve danışman ortak) */
-export function DailyLogSection({ studentId, studentName }: { studentId: string; studentName?: string }) {
+export function DailyLogSection({ studentId, studentName, audience = "student" }: { studentId: string; studentName?: string; audience?: "student" | "counselor" }) {
   const [date, setDate] = useState(todayISO());
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -292,7 +319,7 @@ export function DailyLogSection({ studentId, studentName }: { studentId: string;
         </div>
       </div>
 
-      <DailyLogForm key={date} studentId={studentId} date={date} onSaved={load} />
+      <DailyLogForm key={date} studentId={studentId} date={date} onSaved={load} history={logs ?? []} audience={audience} />
 
       {error && <ErrorBox>{error}</ErrorBox>}
       <LogHistory logs={logs} onPick={setDate} studentName={studentName} />

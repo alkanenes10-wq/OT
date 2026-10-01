@@ -46,9 +46,12 @@ export function Logo() {
   return (
     <span className="flex items-center gap-2">
       <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-primary-fg">
-        <Icon name="check" size={18} strokeWidth={2.6} />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 17.5l4.5-4.5 3.5 3.5L19 9" />
+          <circle cx="19" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
+        </svg>
       </span>
-      <span className="display text-[19px] font-semibold">{APP_NAME}</span>
+      <span className="display text-[18px]">{APP_NAME}</span>
     </span>
   );
 }
@@ -61,6 +64,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: { v: "program" }, label: "Program", icon: "calendar" },
   { to: { v: "gunluk" }, label: "Günlük", icon: "journal" },
   { to: { v: "konular" }, label: "Konular", icon: "book" },
+  { to: { v: "sorular" }, label: "Sorular", icon: "question" },
   { to: { v: "ilerleme" }, label: "İlerleme", icon: "chart" },
 ];
 
@@ -152,7 +156,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto max-w-3xl px-4 pb-28 pt-4 md:pb-12">{children}</main>
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur md:hidden" aria-label="Alt menü">
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {STUDENT_NAV.map((item) => {
             const active = isActive(item);
             return (
@@ -177,12 +181,13 @@ export function CounselorShell({ children }: { children: ReactNode }) {
   const { route } = useRoute();
   const { profile, signOut } = useAuth();
   const settings = route.v === "ayarlar";
+  const calendar = route.v === "takvim";
   const link = (active: boolean) =>
     cx("hidden rounded-lg px-3 py-1.5 text-sm font-medium transition sm:inline-flex", active ? "bg-primary-soft text-primary-ink" : "text-muted hover:text-fg");
   const side = (active: boolean) =>
     cx(
       "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition",
-      active ? "bg-surface font-semibold text-fg shadow-[0_1px_2px_rgba(31,42,46,0.06)]" : "text-muted hover:bg-surface/60 hover:text-fg",
+      active ? "bg-primary-soft font-semibold text-primary-ink" : "font-medium text-muted hover:bg-surface-2 hover:text-fg",
     );
   const initials = (profile?.full_name ?? "?")
     .split(/\s+/)
@@ -193,13 +198,17 @@ export function CounselorShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh lg:flex">
       {/* Masaüstü: sol menü */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-7 border-r border-line bg-surface-2 px-4 py-7 lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-7 border-r border-line bg-surface px-4 py-6 lg:flex">
         <A to={{}} aria-label="Öğrenciler" className="px-2">
           <Logo />
         </A>
         <nav className="flex flex-col gap-1" aria-label="Ana menü">
-          <A to={{}} className={side(!settings)}>
+          <p className="eyebrow px-3 pb-1">Menü</p>
+          <A to={{}} className={side(!settings && !calendar)}>
             <Icon name="users" size={18} /> Öğrenciler
+          </A>
+          <A to={{ v: "takvim" }} className={side(calendar)}>
+            <Icon name="calendar" size={18} /> Takvim
           </A>
           <A to={{ v: "ayarlar" }} className={side(settings)}>
             <Icon name="settings" size={18} /> Ayarlar
@@ -224,8 +233,11 @@ export function CounselorShell({ children }: { children: ReactNode }) {
               <Logo />
             </A>
             <div className="flex items-center gap-1">
-              <A to={{}} className={link(!settings)}>
+              <A to={{}} className={link(!settings && !calendar)}>
                 Öğrenciler
+              </A>
+              <A to={{ v: "takvim" }} className={link(calendar)}>
+                Takvim
               </A>
               <A to={{ v: "ayarlar" }} className={link(settings)}>
                 Ayarlar
@@ -390,13 +402,46 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-10">
-      <div className="mb-8 flex justify-center">
+    <div className="min-h-dvh lg:grid lg:grid-cols-[1.05fr_1fr]">
+      <aside className="relative hidden overflow-hidden bg-primary p-12 text-primary-fg lg:flex lg:flex-col lg:justify-between">
+        <svg className="pointer-events-none absolute -right-24 -bottom-24 h-[520px] w-[520px] opacity-[0.08]" viewBox="0 0 200 200" aria-hidden>
+          <circle cx="100" cy="100" r="98" fill="none" stroke="currentColor" strokeWidth="1" />
+          <circle cx="100" cy="100" r="70" fill="none" stroke="currentColor" strokeWidth="1" />
+          <circle cx="100" cy="100" r="42" fill="none" stroke="currentColor" strokeWidth="1" />
+          <path d="M20 150 L70 100 L100 125 L175 45" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-white/15">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M4 17.5l4.5-4.5 3.5 3.5L19 9" />
+              <circle cx="19" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+          <span className="display text-[19px]">{APP_NAME}</span>
+        </span>
+        <div className="relative max-w-md">
+          <p className="text-sm font-semibold tracking-wide text-white/70 uppercase">Psikolojik danışman ve öğrenci için</p>
+          <h2 className="display mt-3 text-[40px] leading-[1.1]">Akademik ve psikolojik gelişim tek ekranda.</h2>
+          <ul className="mt-8 space-y-3 text-[15px] text-white/90">
+            {["Haftalık program, konu takibi ve deneme analizi", "Günlük uyku, kaygı ve motivasyon takibi", "Kişisel açıklamalar ve erken uyarılar", "Görüşme takvimi, soru bankası ve veli raporu"].map((t) => (
+              <li key={t} className="flex items-center gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/15">
+                  <Icon name="check" size={14} strokeWidth={2.6} />
+                </span>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="relative text-sm text-white/60">İrade değil, yöntem.</p>
+      </aside>
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-10">
+      <div className="mb-8 flex justify-center lg:hidden">
         <Logo />
       </div>
       <InstallHint />
-      <div className="card p-6">
-        <h1 className="display text-2xl">Giriş yap</h1>
+      <div className="card p-6 sm:p-8 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <h1 className="display text-[28px]">Giriş yap</h1>
         <p className="mt-1 text-sm text-muted">{APP_NAME} hesabınla devam et.</p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
           <Field label="Kullanıcı adı veya e-posta" htmlFor="login" hint="Öğrenciler kullanıcı adıyla, danışmanlar e-posta adresiyle girer.">
@@ -431,6 +476,7 @@ export function LoginScreen() {
         </p>
       )}
     </main>
+    </div>
   );
 }
 

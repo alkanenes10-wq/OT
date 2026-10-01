@@ -6,6 +6,7 @@ import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { COURSES, courseTopicIds, isCompleted } from "./curriculum";
 import { errorText, fetchLogs, fetchPlans, fetchTopicProgress, sb } from "./db";
 import { addDays, avg, computeSignals, type DailyLog, fmtNum, formatShort, pct, pickCurrentPlan, type PlanTask, rangeDates, type Signal, todayISO, type TopicProgress, type WeeklyPlan } from "./lib";
+import { DetailedSignalList, VariablesCard } from "./rehber";
 import { Card, cx, EmptyState, ErrorBox, Icon, PageLoader, ProgressBar, Segmented } from "./ui";
 
 /** Kapsayıcının genişliğini ölçer; grafik hiçbir zaman kapsayıcıdan taşmaz. */
@@ -473,12 +474,54 @@ export function StudentInsights({ studentId, showSignals = false }: { studentId:
   return (
     <div className="space-y-4">
       {showSignals && (
-        <Card title="Dikkat edilecekler" subtitle="Son 14 gün · tanı değil, görüşmede konuşulabilecek gözlemler">
-          <SignalList signals={signals} empty="Belirgin bir uyarı yok." />
+        <Card title="Dikkat edilecekler" subtitle="Son 14 gün · tanı değil, görüşmede konuşulabilecek gözlemler · ayrıntı için uyarıya dokun">
+          <DetailedSignalList signals={signals} empty="Belirgin bir uyarı yok." />
         </Card>
       )}
 
       <GrowthDashboard studentId={studentId} />
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">Günlük takip</h2>
+        <div className="w-full sm:w-60">
+          <Segmented
+            size="sm"
+            ariaLabel="Zaman aralığı"
+            value={range}
+            onChange={setRange}
+            options={[
+              { value: 14, label: "14 gün" },
+              { value: 30, label: "30 gün" },
+              { value: 60, label: "60 gün" },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile label="Doldurulan gün" value={`${inRange.length}/${range}`} sub={`%${pct(inRange.length, range) ?? 0}`} />
+        <StatTile label="Ortalama uyku" value={sleepAvg == null ? "—" : `${fmtNum(sleepAvg)} sa`} />
+        <StatTile label="Ortalama telefon" value={phoneAvg == null ? "—" : `${fmtNum(phoneAvg, 0)} dk`} />
+        <StatTile
+          label="Erteleme / plan değişikliği"
+          value={`${procDays} / ${replanDays}`}
+          sub={`${procAnswered} ve ${replanAnswered} yanıtlı günde`}
+        />
+      </div>
+
+      <VariablesCard logs={logs.filter((l) => l.log_date >= addDays(todayISO(), -59))} audience={showSignals ? "counselor" : "student"} />
+
+      {inRange.length > 0 && (
+        <Card title="Telefon / dikkat dağıtıcı" subtitle="dakika / gün">
+          <BarChart
+            ariaLabel="Günlere göre telefon süresi"
+            labels={dates}
+            values={dates.map((d) => byDate.get(d)?.phone_minutes ?? null)}
+            unit="dk"
+            formatValue={(v) => fmtNum(v, 0)}
+          />
+        </Card>
+      )}
 
       <Card title="Konu ilerlemesi" subtitle="Bitti + tekrar edildi">
         <ul className="space-y-3">

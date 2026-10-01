@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-5.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-6.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,16 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 2.2 — iki sürüm birleştirildi + gelişim panosu
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-6.sql` → **Run** (öğrenciyle paylaşılan notlar). `guncelleme-5.sql` daha önce çalıştırıldıysa tekrar gerekmez.
+
+- **Özet → Gelişim:** Gün / Hafta / Ay seçimiyle çözülen soru (sayısal/sözel), çalışma süresi, program tamamlama, derslere göre soru, motivasyon-kaygı-enerji, uyku, TYT/AYT net grafikleri. Öğrenci aynısını **İlerleme** ekranında görür.
+- **Program → Takvim görünümü:** blokları sürükleyip başka gün/saate taşıma, boş alana tıklayıp görev ekleme. Otomatik programda sade ayarlar, önizlemede **Değiştir** / **×**.
+- **Denemeler → Konu bazlı yanlış geçmişi:** hangi konuda kaç denemede, hangi tarihte kaç yanlış.
+- **Notlar → Öğrenciyle paylaşılan notlar:** öğrenci Bugün ekranında görür, "Okudum" der.
+- Takvim, Sorular, Görüşmeler, Veli raporu, günlük değişken analizi aynen korundu.
 
 ## Güncelleme 2 — yeni haftalık program ve deneme analizi
 
