@@ -38,6 +38,7 @@ const APP_FILES = [
   "veli-raporu.tsx",
   "soru-bankasi.tsx",
   "takvim.tsx",
+  "theme.tsx",
 ];
 
 mkdirSync("app", { recursive: true });

@@ -23,6 +23,14 @@ import {
 import { Card, EmptyState, ErrorBox, PageLoader, Segmented, cx } from "./ui";
 
 type Gran = "gun" | "hafta" | "ay";
+type Kind = "cubuk" | "cizgi";
+const KIND_KEY = "yks-grafik-turu";
+
+/** Çizgi grafik için 0'dan başlayan ölçek */
+function lineScale(values: (number | null)[], fixedMax?: number) {
+  const top = fixedMax ?? niceMax(Math.max(1, ...values.map((v) => v ?? 0)) * 1.05);
+  return { yMin: 0, yMax: top, yTicks: [0, top / 2, top] };
+}
 const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -63,6 +71,19 @@ type Row = { date: string; subject: string; cat: "sayisal" | "sozel" | null; sol
 
 export function GrowthDashboard({ studentId }: { studentId: string }) {
   const [gran, setGran] = useState<Gran>("hafta");
+  const [kind, setKindState] = useState<Kind>("cubuk");
+  useEffect(() => {
+    try {
+      const k = localStorage.getItem(KIND_KEY);
+      if (k === "cizgi" || k === "cubuk") setKindState(k);
+    } catch {}
+  }, []);
+  const setKind = (k: Kind) => {
+    setKindState(k);
+    try {
+      localStorage.setItem(KIND_KEY, k);
+    } catch {}
+  };
   const [rows, setRows] = useState<Row[] | null>(null);
   const [dayMinutes, setDayMinutes] = useState<Map<string, number>>(new Map());
   const [logs, setLogs] = useState<DailyLog[]>([]);
@@ -200,6 +221,9 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
   const sumQ = (i: number) => agg.say[i] + agg.soz[i];
   const rangeQ = agg.say.reduce((a, b) => a + b, 0) + agg.soz.reduce((a, b) => a + b, 0);
   const rangeMin = agg.minutes.reduce((a, b) => a + b, 0);
+  // Çizgide, henüz başlamış (boş) son dönem sıfıra düşüş gibi görünmesin diye boş bırakılır.
+  const open = <T extends number | null>(arr: T[]) => arr.map((v, i) => (i === last && !v ? null : v));
+  const hours = open(agg.minutes.map((m) => Math.round((m / 60) * 10) / 10));
   const rangeTotal = agg.total.reduce((a, b) => a + b, 0);
   const rangeDone = agg.doneN.reduce((a, b) => a + b, 0);
   const rangeC = agg.correct.reduce((a, b) => a + b, 0);
@@ -214,7 +238,20 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
           <h2 className="display text-2xl">Gelişim</h2>
           <p className="text-sm text-muted">{rangeName} · çözülen soru, çalışma süresi, program ve günlük takip</p>
         </div>
-        <div className="w-full sm:w-56">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <div className="w-full sm:w-44">
+            <Segmented
+              size="sm"
+              ariaLabel="Grafik türü"
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: "cubuk", label: "Çubuk" },
+                { value: "cizgi", label: "Çizgi" },
+              ]}
+            />
+          </div>
+          <div className="w-full sm:w-56">
           <Segmented
             size="sm"
             ariaLabel="Zaman ayrıntısı"
@@ -226,6 +263,7 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
               { value: "ay", label: "Ay" },
             ]}
           />
+          </div>
         </div>
       </div>
 
@@ -255,6 +293,20 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
           </div>
 
           <Card title="Çözülen soru" subtitle={`${gran === "gun" ? "gün" : gran === "hafta" ? "hafta" : "ay"} başına · sayısal ve sözel · toplam ${fmtNum(rangeQ, 0)}`}>
+            {kind === "cizgi" ? (
+              <LineChart
+                ariaLabel="Dönemlere göre çözülen soru, sayısal, sözel ve toplam"
+                labels={B}
+                formatLabel={fl}
+                formatTip={ft}
+                {...lineScale(B.map((_, i) => sumQ(i)))}
+                series={[
+                  { key: "say", label: "Sayısal", color: "var(--series-1)", values: open(agg.say) },
+                  { key: "soz", label: "Sözel", color: "var(--series-2)", values: open(agg.soz) },
+                  { key: "top", label: "Toplam", color: "var(--series-3)", values: open(B.map((_, i) => sumQ(i))) },
+                ]}
+              />
+            ) : (
             <StackedBars
               labels={B}
               a={{ label: "Sayısal", color: "var(--series-1)", values: agg.say }}
@@ -263,20 +315,42 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
               formatTip={ft}
               unit="soru"
             />
+            )}
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card title="Çalışma süresi" subtitle={`saat · toplam ${minutesToText(rangeMin)}`}>
-              <BarChart
-                ariaLabel="Dönemlere göre çalışma süresi"
-                labels={B}
-                values={agg.minutes.map((m) => (m ? Math.round((m / 60) * 10) / 10 : null))}
-                unit="saat"
-                color="var(--series-3)"
-                formatLabel={fl}
-              />
+              {kind === "cizgi" ? (
+                <LineChart
+                  ariaLabel="Dönemlere göre çalışma süresi"
+                  labels={B}
+                  formatLabel={fl}
+                  formatTip={ft}
+                  {...lineScale(hours)}
+                  series={[{ key: "saat", label: "Saat", color: "var(--series-3)", values: hours }]}
+                />
+              ) : (
+                <BarChart
+                  ariaLabel="Dönemlere göre çalışma süresi"
+                  labels={B}
+                  values={agg.minutes.map((m) => (m ? Math.round((m / 60) * 10) / 10 : null))}
+                  unit="saat"
+                  color="var(--series-3)"
+                  formatLabel={fl}
+                />
+              )}
             </Card>
             <Card title="Program tamamlama" subtitle="tamamlanan görev yüzdesi">
+              {kind === "cizgi" ? (
+                <LineChart
+                  ariaLabel="Dönemlere göre program tamamlama yüzdesi"
+                  labels={B}
+                  formatLabel={fl}
+                  formatTip={ft}
+                  {...lineScale(agg.completion, 100)}
+                  series={[{ key: "tam", label: "Tamamlama", color: "var(--series-1)", values: open(agg.completion) }]}
+                />
+              ) : (
               <BarChart
                 ariaLabel="Dönemlere göre program tamamlama yüzdesi"
                 labels={B}
@@ -288,6 +362,7 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
                 formatLabel={fl}
                 formatValue={(v) => fmtNum(v, 0)}
               />
+              )}
             </Card>
           </div>
 
@@ -313,15 +388,28 @@ export function GrowthDashboard({ studentId }: { studentId: string }) {
                 />
               </Card>
               <Card title="Uyku" subtitle="ortalama saat">
-                <BarChart
-                  ariaLabel="Dönemlere göre ortalama uyku"
-                  labels={B}
-                  values={agg.sleep}
-                  unit="saat"
-                  refLine={{ value: 7, label: "7 sa" }}
-                  formatLabel={fl}
-                  color="var(--series-1)"
-                />
+                {kind === "cizgi" ? (
+                  <LineChart
+                    ariaLabel="Dönemlere göre ortalama uyku"
+                    labels={B}
+                    formatLabel={fl}
+                    formatTip={ft}
+                    yMin={0}
+                    yMax={10}
+                    yTicks={[0, 5, 10]}
+                    series={[{ key: "uyku", label: "Uyku (sa)", color: "var(--series-1)", values: agg.sleep }]}
+                  />
+                ) : (
+                  <BarChart
+                    ariaLabel="Dönemlere göre ortalama uyku"
+                    labels={B}
+                    values={agg.sleep}
+                    unit="saat"
+                    refLine={{ value: 7, label: "7 sa" }}
+                    formatLabel={fl}
+                    color="var(--series-1)"
+                  />
+                )}
               </Card>
             </div>
           )}

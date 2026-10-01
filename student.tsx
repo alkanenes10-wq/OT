@@ -1,6 +1,7 @@
 "use client";
 // Öğrenci ekranları: Bugün, Program, Günlük, Konular, İlerleme, Ayarlar.
 
+import { AppearanceCard } from "./theme";
 import { useEffect, useState } from "react";
 import { ChangeOwnPassword } from "./counselor";
 import { DailyLogSection } from "./daily";
@@ -317,6 +318,7 @@ function Settings() {
         </dl>
         <p className="mt-3 text-xs text-faint">Bilgilerini danışmanın güncelleyebilir.</p>
       </Card>
+      <AppearanceCard />
       <DailyReminderCard />
       <ChangeOwnPassword />
       <Button variant="danger" icon="logout" className="w-full" onClick={() => signOut()}>

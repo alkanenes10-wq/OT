@@ -1,6 +1,7 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { AppearanceCard } from "./theme";
 import { CounselorSessions, WhatsAppReminder } from "./ekler";
 import { ParentReport } from "./veli-raporu";
 import { QuestionBank } from "./soru-bankasi";
@@ -870,6 +871,7 @@ function CounselorSettings() {
           </div>
         </div>
       </Card>
+      <AppearanceCard />
       <CounselorTeam />
       <ChangeOwnPassword />
       <Card title="Veri güvenliği (KVKK)">

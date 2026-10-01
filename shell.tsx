@@ -1,4 +1,5 @@
 "use client";
+import { ThemeSync } from "./theme";
 // Uygulama iskeleti: sağlayıcılar, üst menü / alt menü, giriş ve ilk kurulum ekranları.
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
@@ -11,6 +12,7 @@ import { Button, ErrorBox, Field, Icon, IconButton, PageLoader, ToastProvider, c
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
+      <ThemeSync />
       <RouterProvider>
         <ToastProvider>
           <OfflineBanner />

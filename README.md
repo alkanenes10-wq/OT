@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-6.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-7.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,13 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 2.3 — çizgi grafik ve kişisel renk paleti
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-7.sql` → **Run**. Yeni dosya: `theme.tsx`.
+
+- **Özet → Gelişim → Çubuk / Çizgi:** çözülen soru, çalışma süresi, program tamamlama ve uyku grafiklerini çizgiye çevirir. Seçim cihazda hatırlanır.
+- **Ayarlar → Görünüm:** öğrenci (ve danışman) 7 renk paletinden birini (Petrol, Okyanus, Mor, Gül, Gün batımı, Orman, Grafit) ve Otomatik / Açık / Koyu temayı seçer. Seçim hesaba kaydedilir; telefonda ve bilgisayarda aynı görünür. Grafik renkleri okunabilirlik için sabittir.
 
 ## Güncelleme 2.2 — iki sürüm birleştirildi + gelişim panosu
 

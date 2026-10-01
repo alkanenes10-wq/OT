@@ -696,3 +696,7 @@ export function pickCurrentPlan<T extends { start_date: string }>(plans: T[], to
   const upcoming = [...sorted].reverse().find((p) => p.start_date > today);
   return upcoming ?? sorted.find((p) => p.start_date <= today) ?? null;
 }
+
+/* Kişisel görünüm (theme.tsx). Sayfa açılırken React yüklenmeden çalışan küçük betik — layout.tsx kullanır. */
+export const THEME_STORAGE_KEY = "yks-gorunum";
+export const THEME_BOOT_SCRIPT = `try{var t=JSON.parse(localStorage.getItem("yks-gorunum")||"{}"),r=document.documentElement;if(t.a&&t.a!=="petrol")r.dataset.accent=t.a;if(t.m==="light"||t.m==="dark")r.dataset.mode=t.m}catch(e){}`;
