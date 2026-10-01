@@ -3,6 +3,7 @@
 -- Supabase → SQL Editor'de BİR KEZ çalıştırın. guncelleme-11.sql daha önce çalıştırılmış olmalı.
 -- Danışmanın kendi öğrencilerinin seri/rozet sayılarını tek sorguda döndürür.
 -- =====================================================================
+drop function if exists public.students_gamification();
 create or replace function public.students_gamification()
 returns table (
   student_id uuid, streak int, best int, logs int, solved int, tasks_done int,

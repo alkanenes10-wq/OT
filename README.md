@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-12.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-13.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,13 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 2.9 — günlük rozetleri ve sınırsız rozetler
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-13.sql` → **Run** (`guncelleme-11.sql` ve `guncelleme-12.sql` daha önce çalıştırılmış olmalı).
+- Yeni rozet türleri: **Günlük serisi** (günlüğü üst üste her gün doldurma), **Eksiksiz günlük** (7 alanın hepsi dolu: uyku, telefon, kaygı, enerji, motivasyon, erteleme, plan değişikliği), **Günlük sadakati** (toplam doldurulan gün).
+- Rozetlerin sınırı yok: her türün ilk hedeflerinden sonra belirli aralıklarla yeni rozet gelir (ör. soru: 100, 500, 1.000, 2.500, 5.000, sonra her 2.500).
+- Öğrenci her rozetin şartını, sıradaki hedefi ve ilerlemesini görür: **Bugün → seri kartındaki rozetler → Rozetlerim** veya **İlerleme → Rozetlerim**.
 
 ## Güncelleme 2.8.2 — öğrenci listesinde rozetler
 
