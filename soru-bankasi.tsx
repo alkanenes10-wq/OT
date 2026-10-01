@@ -3,6 +3,7 @@
 // Sorular uygulamada saklanır; bu sorulardan test hazırlanır, çözülür ve yazdırılır.
 // Bir soru testte 2 kez doğru çözülünce "öğrenildi" olur.
 
+import { ShareToForum } from "./forum";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { A, errorText, sb } from "./db";
 import { DEFAULT_SUBJECTS, formatTR, relativeDay } from "./lib";
@@ -47,7 +48,7 @@ export type QuestionTest = {
 /* ------------------------------------------------------------------ */
 
 /** Fotoğrafı en fazla 1600 px ve JPEG'e küçültür (depolama ve hız için). */
-async function compressImage(file: File, max = 1600): Promise<Blob> {
+export async function compressImage(file: File, max = 1600): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -553,6 +554,8 @@ function QuestionDetail({ q, urls, audience, onClose, onChanged }: { q: Question
             )}
           </div>
         </details>
+
+        {audience === "student" && q.status === "open" && <ShareToForum q={q} imageUrl={urls[q.image_path]} />}
 
         <div className="flex flex-wrap justify-between gap-2">
           {q.status === "open" ? (

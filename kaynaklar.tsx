@@ -12,10 +12,12 @@ import {
   fmtNum,
   formatShort,
   todayISO,
+  type CatalogItem,
   type Resource,
   type ResourceKind,
   type ResourceProgress,
 } from "./lib";
+import { CatalogPicker, catalogTopicFor } from "./katalog";
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, IconButton, Modal, PageLoader, Segmented, confirmAction, cx, useToast } from "./ui";
 
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
@@ -51,7 +53,7 @@ const toneCls: Record<string, string> = {
 };
 
 /* ------------------------------------------------------------------ */
-export function ResourceTracker({ studentId }: { studentId: string }) {
+export function ResourceTracker({ studentId, audience = "counselor" }: { studentId: string; audience?: "student" | "counselor" }) {
   const [list, setList] = useState<Resource[] | null>(null);
   const [progress, setProgress] = useState<ResourceProgress[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +105,13 @@ export function ResourceTracker({ studentId }: { studentId: string }) {
     <div className="space-y-4">
       <Card
         title="Kaynaklar"
-        subtitle={list.length ? `${list.length} kaynak · toplam ${totalDone} test çözüldü · son 7 günde ${weekDone}` : "Öğrencinin kullandığı kitapları ekleyin; test test ilerlemeyi izleyin."}
+        subtitle={
+          list.length
+            ? `${list.length} kaynak · toplam ${totalDone} test çözüldü · son 7 günde ${weekDone}`
+            : audience === "student"
+              ? "Kullandığın kitapları listeden seç; çözdüğün testleri işaretle."
+              : "Öğrencinin kullandığı kitapları katalogdan seçin; test test ilerlemeyi izleyin."
+        }
         action={
           <Button size="sm" icon="plus" onClick={() => setAdding(true)} disabled={Boolean(error)}>
             Kaynak ekle
@@ -113,7 +121,9 @@ export function ResourceTracker({ studentId }: { studentId: string }) {
         {error && <ErrorBox>{error}</ErrorBox>}
         {!error && list.length === 0 ? (
           <EmptyState icon="book" title="Henüz kaynak yok">
-            Örnek: &quot;3D Yayınları · TYT Matematik Soru Bankası, 64 test&quot;. Programdaki görevlere kitap ve test numarası bağlayınca, görev bitince test burada otomatik işaretlenir.
+            {audience === "student"
+              ? "“Kaynak ekle” ile kullandığın kitabı listeden seç. Aradığın kitap yoksa danışmanına söyle."
+              : "“Kaynak ekle” ile katalogdan seçin. Kitap katalogda yoksa oradan tanımlayabilirsiniz (Ayarlar → Kaynak kataloğu). Programdaki görevlere kitap ve test bağlayınca, görev bitince test burada otomatik işaretlenir."}
           </EmptyState>
         ) : (
           !error && (
@@ -176,10 +186,12 @@ export function ResourceTracker({ studentId }: { studentId: string }) {
         )}
       </Card>
       {adding && (
-        <ResourceForm
+        <CatalogPicker
           studentId={studentId}
+          existing={list}
+          audience={audience}
           onClose={() => setAdding(false)}
-          onSaved={() => {
+          onAdded={() => {
             setAdding(false);
             load();
           }}
@@ -189,6 +201,7 @@ export function ResourceTracker({ studentId }: { studentId: string }) {
         <ResourceDetail
           resource={open}
           progress={progress.filter((p) => p.resource_id === open.id)}
+          audience={audience}
           onClose={() => setOpenId(null)}
           onChanged={load}
         />
@@ -301,7 +314,35 @@ function ResourceForm({ studentId, resource, onClose, onSaved }: { studentId: st
 }
 
 /* ------------------------------------------------------------------ */
-function ResourceDetail({ resource, progress, onClose, onChanged }: { resource: Resource; progress: ResourceProgress[]; onClose: () => void; onChanged: () => void }) {
+function ResourceDetail({
+  resource,
+  progress,
+  audience,
+  onClose,
+  onChanged,
+}: {
+  resource: Resource;
+  progress: ResourceProgress[];
+  audience: "student" | "counselor";
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [catalog, setCatalog] = useState<CatalogItem | null>(null);
+  useEffect(() => {
+    if (!resource.catalog_id) return;
+    sb()
+      .from("resource_catalog")
+      .select("*")
+      .eq("id", resource.catalog_id)
+      .maybeSingle()
+      .then(({ data }) => setCatalog((data as CatalogItem | null) ?? null));
+  }, [resource.catalog_id]);
+  async function setStatus(status: Resource["status"]) {
+    const { error } = await sb().from("resources").update({ status }).eq("id", resource.id);
+    if (error) return toast.show(errorText(error), "danger");
+    toast.show(status === "done" ? "Kaynak bitti olarak işaretlendi 🎉" : "Kaydedildi");
+    onChanged();
+  }
   const toast = useToast();
   const [edit, setEdit] = useState(false);
   const [testNo, setTestNo] = useState<number | null>(null);
@@ -347,10 +388,12 @@ function ResourceDetail({ resource, progress, onClose, onChanged }: { resource: 
         title={resource.title}
         footer={
           <>
-            <IconButton icon="trash" label="Kaynağı sil" onClick={remove} />
-            <Button variant="ghost" icon="edit" onClick={() => setEdit(true)}>
-              Düzenle
-            </Button>
+            {audience === "counselor" && <IconButton icon="trash" label="Kaynağı öğrencinin listesinden kaldır" onClick={remove} />}
+            {audience === "counselor" && !resource.catalog_id && (
+              <Button variant="ghost" icon="edit" onClick={() => setEdit(true)}>
+                Düzenle
+              </Button>
+            )}
             <Button icon="plus" onClick={() => setTestNo(nextNo)}>
               Test {nextNo} sonucu
             </Button>
@@ -363,8 +406,24 @@ function ResourceDetail({ resource, progress, onClose, onChanged }: { resource: 
             <Mini label="Doğru oranı" value={a != null ? `%${a}` : "—"} />
             <Mini label="Doğru · yanlış" value={c + w ? `${fmtNum(c, 0)} · ${fmtNum(w, 0)}` : "—"} />
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">{[resource.publisher, resource.subject, resource.total_tests ? `${resource.total_tests} test` : null].filter(Boolean).join(" · ")}</p>
+            <div className="w-full sm:w-72">
+              <Segmented
+                size="sm"
+                ariaLabel="Kaynak durumu"
+                value={resource.status}
+                onChange={setStatus}
+                options={[
+                  { value: "active", label: "Devam" },
+                  { value: "paused", label: "Ara verdim" },
+                  { value: "done", label: "Bitti" },
+                ]}
+              />
+            </div>
+          </div>
           <div>
-            <p className="mb-2 text-sm font-medium">Testler</p>
+            <p className="mb-2 text-sm font-medium">Testler {audience === "student" && <span className="font-normal text-muted">· çözdüğün testin numarasına dokun</span>}</p>
             <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-10">
               {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
                 const p = byNo.get(n);
@@ -424,6 +483,8 @@ function ResourceDetail({ resource, progress, onClose, onChanged }: { resource: 
       {testNo != null && (
         <TestResultForm
           resource={resource}
+          catalog={catalog}
+          audience={audience}
           testNo={testNo}
           existing={byNo.get(testNo) ?? null}
           onClose={() => setTestNo(null)}
@@ -454,7 +515,23 @@ function Mini({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TestResultForm({ resource, testNo, existing, onClose, onSaved }: { resource: Resource; testNo: number; existing: ResourceProgress | null; onClose: () => void; onSaved: () => void }) {
+function TestResultForm({
+  resource,
+  catalog,
+  audience,
+  testNo,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  resource: Resource;
+  catalog: CatalogItem | null;
+  audience: "student" | "counselor";
+  testNo: number;
+  existing: ResourceProgress | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const toast = useToast();
   const topics = useMemo(() => topicsForSubject(resource.subject), [resource.subject]);
   const [no, setNo] = useState(String(testNo));
@@ -465,6 +542,7 @@ function TestResultForm({ resource, testNo, existing, onClose, onSaved }: { reso
   const [date, setDate] = useState(existing?.done_on ?? todayISO());
   const [busy, setBusy] = useState(false);
   const num = (v: string) => (v === "" ? null : Math.max(0, Math.min(500, parseInt(v, 10) || 0)));
+  const catalogTopic = catalogTopicFor(catalog, parseInt(no, 10) || 0);
 
   async function save() {
     const n = parseInt(no, 10);
@@ -474,7 +552,8 @@ function TestResultForm({ resource, testNo, existing, onClose, onSaved }: { reso
       resource_id: resource.id,
       student_id: resource.student_id,
       test_no: n,
-      topic_id: topic || null,
+      // Öğrenci konu seçmez: katalogdaki test → konu eşleşmesi kullanılır (veritabanı da doldurur)
+      topic_id: audience === "counselor" ? topic || null : (existing?.topic_id ?? catalogTopicFor(catalog, parseInt(no, 10) || 0)),
       correct: num(correct),
       wrong: num(wrong),
       empty: num(empty),
@@ -528,16 +607,29 @@ function TestResultForm({ resource, testNo, existing, onClose, onSaved }: { reso
             <input id="t-e" className="field" inputMode="numeric" value={empty} onChange={(e) => setEmpty(e.target.value.replace(/\D/g, ""))} />
           </Field>
         </div>
-        <Field label="Konu (isteğe bağlı)" htmlFor="t-topic" hint="Konu seçilirse konu başarı analizine de eklenir.">
-          <select id="t-topic" className="field" value={topic} onChange={(e) => setTopic(e.target.value)}>
-            <option value="">— Konu seçilmedi —</option>
-            {topics.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {audience === "counselor" ? (
+          <Field
+            label="Konu"
+            htmlFor="t-topic"
+            hint={catalogTopic ? `Boş bırakılırsa katalogdaki konu kullanılır: ${topicName.get(catalogTopic) ?? catalogTopic}` : "Seçilirse konu başarı analizine de eklenir."}
+          >
+            <select id="t-topic" className="field" value={topic} onChange={(e) => setTopic(e.target.value)}>
+              <option value="">— Konu seçilmedi —</option>
+              {topics.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          (existing?.topic_id ?? catalogTopic) && (
+            <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+              <span className="text-muted">Konu: </span>
+              {topicName.get((existing?.topic_id ?? catalogTopic)!) ?? existing?.topic_id ?? catalogTopic}
+            </p>
+          )
+        )}
         <Field label="Tarih" htmlFor="t-date">
           <input id="t-date" type="date" className="field" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
         </Field>

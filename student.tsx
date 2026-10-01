@@ -1,6 +1,7 @@
 "use client";
 // Öğrenci ekranları: Bugün, Program, Günlük, Konular, İlerleme, Ayarlar.
 
+import { ForumBoard } from "./forum";
 import { AppearanceCard } from "./theme";
 import { useEffect, useState } from "react";
 import { ChangeOwnPassword } from "./counselor";
@@ -16,7 +17,7 @@ import { StudentSupport } from "./support";
 import { StudentNotes } from "./notes";
 import { InstallHint, PageHeader } from "./shell";
 import { TopicsHub } from "./konu-analizi";
-import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, ProgressBar, useToast } from "./ui";
+import { Button, Card, cx, EmptyState, ErrorBox, Icon, LinkButton, PageLoader, ProgressBar, Segmented, useToast } from "./ui";
 
 function Today() {
   const { profile } = useAuth();
@@ -270,18 +271,33 @@ function Topics() {
   return (
     <>
       <PageHeader title="Konular" />
-      <TopicsHub studentId={profile.id} studentName={profile.full_name} />
+      <TopicsHub studentId={profile.id} studentName={profile.full_name} audience="student" />
     </>
   );
 }
 
 function Questions() {
   const { profile } = useAuth();
+  const [view, setView] = useState<"benim" | "ortak">("benim");
   if (!profile) return null;
   return (
     <>
-      <PageHeader title="Soru bankası" subtitle="Yapamadığın soruları sakla, cevabına bak, onlardan test çöz." />
-      <QuestionBank studentId={profile.id} audience="student" />
+      <PageHeader
+        title="Sorular"
+        subtitle={view === "benim" ? "Yapamadığın soruları sakla, cevabına bak, onlardan test çöz." : "Arkadaşlarının soruları — herkes anonim. Bildiğin bir soruya çözüm yolunu yaz."}
+      />
+      <div className="mb-4">
+        <Segmented
+          ariaLabel="Sorular görünümü"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "benim", label: "Sorularım" },
+            { value: "ortak", label: "Ortak sorular" },
+          ]}
+        />
+      </div>
+      {view === "benim" ? <QuestionBank studentId={profile.id} audience="student" /> : <ForumBoard audience="student" />}
     </>
   );
 }

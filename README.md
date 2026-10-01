@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-8.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-10.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,24 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 2.6 — kaynak kataloğu
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-10.sql` → **Run** (2.5'i henüz yüklemediyseniz önce `guncelleme-9.sql`). Yeni dosya: `katalog.tsx`.
+
+- **Ayarlar → Kaynak kataloğu:** kitaplar sistemde tanımlanır (yayınevi, kitap adı, ders, tür, test sayısı). "Toplu ekle" ile Excel'den yapıştırılabilir (`Yayınevi | Kitap adı | Ders | Test sayısı`). İsteğe bağlı olarak hangi testin hangi konu olduğu (ör. Test 1–6 → Üslü İfadeler) tanımlanır. Katalog tüm danışmanlar için ortaktır; bir kitabı düzenlemek öğrencilerin listesini de günceller. "Kaldır" yeni seçimleri kapatır, mevcut listeleri bozmaz.
+- **Öğrenci:** Konular → Kaynaklar → "Kaynak ekle" ile yalnızca katalogdan seçer; kitap bilgilerini değiştiremez, kaynak silemez. Testin numarasına dokunup doğru/yanlış girer; konu katalogdan kendiliğinden yazılır. Kaynağı "Devam / Ara verdim / Bitti" olarak işaretleyebilir.
+- **Danışman:** öğrenci adına katalogdan ekler; katalogda olmayan kitabı aynı pencereden tanımlayıp ekleyebilir.
+- Bu kurallar veritabanında da uygulanır (öğrenci katalog dışı kaynak oluşturamaz).
+
+## Güncelleme 2.5 — ortak soru forumu
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-9.sql` → **Run**. Yeni dosya: `forum.tsx`.
+
+- **Öğrenci → Sorular → Ortak sorular:** tüm öğrencilerin paylaştığı sorular. Herkes **tamamen anonim** ("Bir arkadaşın"). Cevap yazılabilir, çözüm fotoğrafı eklenebilir; soru sahibi "İşime yaradı" deyince soru "Çözüldü" olur. Uygunsuz içerik "Bildir" ile danışmana gider.
+- **Paylaşmak:** Sorularım'da soruyu aç → "Arkadaşlarına sor (anonim)".
+- **Onay:** öğrencinin paylaştığı soru ve yazdığı cevap, **kendi danışmanı onaylayınca** herkese açılır. Danışman → **Soru forumu → Onay bekleyen** (öğrencinin adı yalnızca burada, danışmana görünür). Danışman cevapları "Danışman" etiketiyle hemen yayınlanır; her danışman yayındaki bir içeriği gizleyebilir.
+- Kötüye kullanıma karşı: günde en fazla 10 soru paylaşımı ve 30 cevap.
 
 ## Güncelleme 2.4 — hatırlatma merkezi, konu başarı analizi, kaynak takibi
 

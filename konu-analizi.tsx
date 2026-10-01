@@ -27,7 +27,7 @@ const WEEKS = 8;
 /* Konular sekmesi                                                     */
 /* ------------------------------------------------------------------ */
 type HubView = "takip" | "analiz" | "kaynak";
-export function TopicsHub({ studentId, studentName }: { studentId: string; studentName: string }) {
+export function TopicsHub({ studentId, studentName, audience = "counselor" }: { studentId: string; studentName: string; audience?: "student" | "counselor" }) {
   const [view, setView] = useState<HubView>("takip");
   return (
     <div className="space-y-4">
@@ -37,13 +37,13 @@ export function TopicsHub({ studentId, studentName }: { studentId: string; stude
         onChange={setView}
         options={[
           { value: "takip", label: "Konu takibi" },
-          { value: "analiz", label: "Başarı analizi" },
+          { value: "analiz", label: "Analiz" },
           { value: "kaynak", label: "Kaynaklar" },
         ]}
       />
       {view === "takip" && <TopicTracker studentId={studentId} studentName={studentName} />}
       {view === "analiz" && <TopicAnalysis studentId={studentId} />}
-      {view === "kaynak" && <ResourceTracker studentId={studentId} />}
+      {view === "kaynak" && <ResourceTracker studentId={studentId} audience={audience} />}
     </div>
   );
 }

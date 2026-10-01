@@ -1,6 +1,8 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { CatalogManager } from "./katalog";
+import { CounselorForum } from "./forum";
 import { ReminderCenter, StudentContactCard } from "./hatirlatma";
 import { AppearanceCard } from "./theme";
 import { CounselorSessions, WhatsAppReminder } from "./ekler";
@@ -876,6 +878,7 @@ function CounselorSettings() {
         </div>
       </Card>
       <AppearanceCard />
+      <CatalogManager />
       <CounselorTeam />
       <ChangeOwnPassword />
       <Card title="Veri güvenliği (KVKK)">
@@ -900,6 +903,7 @@ export function CounselorApp() {
   if (route.v === "ayarlar") return <CounselorSettings />;
   if (route.v === "takvim") return <CounselorCalendar />;
   if (route.v === "hatirlatma") return <ReminderCenter />;
+  if (route.v === "forum") return <CounselorForum />;
   if (route.v === "ogrenci" && route.id) return <StudentDetail key={route.id} id={route.id} tab={route.t} />;
   return <StudentList />;
 }

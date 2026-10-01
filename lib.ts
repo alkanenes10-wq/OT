@@ -724,6 +724,19 @@ export type Resource = {
   total_tests: number;
   status: "active" | "done" | "paused";
   created_at: string;
+  catalog_id?: string | null; // katalogdan seçildiyse (guncelleme-10.sql)
+};
+/** Danışmanların tanımladığı ortak kaynak kataloğu */
+export type CatalogItem = {
+  id: string;
+  title: string;
+  publisher: string;
+  subject: string;
+  kind: ResourceKind;
+  total_tests: number;
+  test_topics: { from: number; to: number; topic_id: string }[];
+  is_active: boolean;
+  created_at: string;
 };
 export type ResourceProgress = {
   id: string;
