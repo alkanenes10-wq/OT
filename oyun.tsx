@@ -45,7 +45,7 @@ export const BADGES: BadgeDef[] = [
 
 const tierCls = { 1: "from-[#d9a066] to-[#a8693a]", 2: "from-[#cfd6de] to-[#8d98a6]", 3: "from-[#f2cf5b] to-[#c99a14]" } as const;
 
-function Medal({ tier, earned, size = 40 }: { tier: 1 | 2 | 3; earned: boolean; size?: number }) {
+export function Medal({ tier, earned, size = 40 }: { tier: 1 | 2 | 3; earned: boolean; size?: number }) {
   return (
     <span
       className={cx("flex shrink-0 items-center justify-center rounded-full", earned ? `bg-gradient-to-br ${tierCls[tier]} text-white shadow-sm` : "border border-dashed border-line bg-surface-2 text-faint")}
@@ -59,7 +59,7 @@ function Medal({ tier, earned, size = 40 }: { tier: 1 | 2 | 3; earned: boolean; 
   );
 }
 
-function Flame({ on }: { on: boolean }) {
+export function Flame({ on }: { on: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden className={on ? "text-warning" : "text-faint"}>
       <path
@@ -213,5 +213,50 @@ export function BadgesCard({ studentId }: { studentId: string }) {
         })}
       </ul>
     </Card>
+  );
+}
+
+/** Öğrenci listesindeki kart için kısa şerit: seri + kazanılan rozetler */
+export function BadgeStrip({ stats }: { stats: GameStats }) {
+  const earned = BADGES.filter((b) => b.earned(stats));
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex items-center gap-0.5" title={`En uzun seri: ${stats.best} gün`}>
+        <span className="-ml-1 scale-75">
+          <Flame on={stats.streak > 0} />
+        </span>
+        <span className={cx("text-sm font-semibold tabular", !stats.streak && "text-faint")}>{stats.streak}</span>
+        <span className="text-[11px] text-muted">gün seri</span>
+      </span>
+      <span className="ml-auto flex items-center">
+        {earned.length ? (
+          <>
+            <span className="flex -space-x-1.5">
+              {earned.slice(-5).map((b) => (
+                <span key={b.id} title={`${b.title} — ${b.desc}`}>
+                  <Medal tier={b.tier} earned size={22} />
+                </span>
+              ))}
+            </span>
+            <span className="ml-1.5 text-[11px] text-muted tabular">
+              {earned.length}/{BADGES.length} rozet
+            </span>
+          </>
+        ) : (
+          <span className="text-[11px] text-faint">henüz rozet yok</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+export async function fetchStudentsGame(): Promise<Map<string, GameStats>> {
+  const { data, error } = await sb().rpc("students_gamification");
+  if (error) return new Map();
+  return new Map(
+    ((data ?? []) as (Omit<GameStats, "n" | "streak_top" | "week_top"> & { student_id: string })[]).map((r) => [
+      r.student_id,
+      { ...r, best: Math.max(r.best, r.streak), n: 0, streak_top: null, week_top: null },
+    ]),
   );
 }

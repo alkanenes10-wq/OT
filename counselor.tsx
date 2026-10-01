@@ -1,7 +1,7 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
-import { BadgesCard } from "./oyun";
+import { BadgesCard, BadgeStrip, fetchStudentsGame, type GameStats } from "./oyun";
 import { NotificationsCard } from "./bildirim";
 import { ParentLinksCard } from "./veli";
 import { CatalogManager } from "./katalog";
@@ -376,6 +376,10 @@ function StudentList() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [game, setGame] = useState<Map<string, GameStats>>(new Map());
+  useEffect(() => {
+    if (profile) fetchStudentsGame().then(setGame);
+  }, [profile]);
 
   useEffect(() => {
     if (!profile) return;
@@ -503,7 +507,7 @@ function StudentList() {
           <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((r) => (
               <li key={r.student.id}>
-                <StudentCard row={r} />
+                <StudentCard row={r} game={game.get(r.student.id)} />
               </li>
             ))}
           </ul>
@@ -528,7 +532,7 @@ function Summary({ label, value, tone, icon }: { label: string; value: string | 
   );
 }
 
-function StudentCard({ row }: { row: Row }) {
+function StudentCard({ row, game }: { row: Row; game?: GameStats }) {
   const s = row.student;
   const logTone = !row.lastLog ? "text-faint" : row.lastLog === todayISO() ? "text-success" : "text-muted";
   return (
@@ -584,6 +588,11 @@ function StudentCard({ row }: { row: Row }) {
           <ProgressBar value={row.topicPct} tone="success" label="Konu ilerlemesi" />
         </div>
       </div>
+      {game && (
+        <div className="mt-3 border-t border-line pt-2.5">
+          <BadgeStrip stats={game} />
+        </div>
+      )}
       {row.signals.some((x) => x.level !== "info") && (
         <div className="mt-3 border-t border-line pt-3">
           <SignalChips signals={row.signals} />
