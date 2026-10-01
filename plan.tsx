@@ -2,6 +2,8 @@
 // Haftalık program: Excel benzeri düzenlenebilir tablo (ders × gün), gün görünümü (telefon),
 // görev düzenleyici ve deneme analizine göre otomatik program oluşturucu.
 
+import { KAZANIMLAR } from "./kazanimlar";
+import { TopicOutcomes } from "./konu-bilgi";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS, COURSES } from "./curriculum";
 import { errorText, fetchAnalyses, fetchPlanDetail, fetchPlans, fetchSchedule, fetchTopicProgress, sb, useAuth, useRoute } from "./db";
@@ -937,6 +939,15 @@ export function TaskRow({
         <p className={cx("text-[15px] leading-snug", task.done && "text-faint line-through")}>{taskTitle(task)}</p>
         {task.topic_id && task.content.trim() && <p className="text-xs text-muted">{task.content}</p>}
         <TaskResourceLine task={task} />
+        {task.topic_id && KAZANIMLAR[task.topic_id] && (
+          <details className="group mt-1">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
+              <Icon name="chevronRight" size={13} className="transition group-open:rotate-90" />
+              Kazanımlar ve alt başlıklar
+            </summary>
+            <TopicOutcomes topicId={task.topic_id} compact className="mt-2 rounded-xl bg-surface-2 p-3" />
+          </details>
+        )}
         {showSolved && (
           <div className="mt-1.5 flex items-center gap-2 text-sm">
             <label className="text-xs text-muted" htmlFor={`solved-${task.id}`}>
@@ -1182,6 +1193,15 @@ function TaskEditor({
                   </optgroup>
                 ))}
             </select>
+            {t.topic_id && KAZANIMLAR[t.topic_id] && (
+              <details className="group mt-2">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
+                  <Icon name="chevronRight" size={13} className="transition group-open:rotate-90" />
+                  Bu konunun kazanımları ({KAZANIMLAR[t.topic_id].length})
+                </summary>
+                <TopicOutcomes topicId={t.topic_id} compact className="mt-2 rounded-xl bg-surface-2 p-3" />
+              </details>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <Button size="sm" variant="soft" icon="target" onClick={suggest} loading={sugBusy}>
                 Başka konu öner

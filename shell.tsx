@@ -47,7 +47,7 @@ function OfflineBanner() {
 export function Logo() {
   return (
     <span className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-primary-fg">
+      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-b from-[#138075] to-[#0b5e56] text-white">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M4 17.5l4.5-4.5 3.5 3.5L19 9" />
           <circle cx="19" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
@@ -56,6 +56,11 @@ export function Logo() {
       <span className="display text-[18px]">{APP_NAME}</span>
     </span>
   );
+}
+
+/** Etkin menü öğesinin arka planı: sayfa değişince yeni öğeye kayarak geçer (View Transitions) */
+function NavPill({ name, className = "rounded-lg bg-primary-soft" }: { name: string; className?: string }) {
+  return <span aria-hidden className={cx("absolute inset-0 -z-10", className)} style={{ viewTransitionName: name }} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -68,7 +73,20 @@ const STUDENT_NAV: NavItem[] = [
   { to: { v: "konular" }, label: "Konular", icon: "book" },
   { to: { v: "sorular" }, label: "Sorular", icon: "question" },
   { to: { v: "ilerleme" }, label: "İlerleme", icon: "chart" },
+  { to: { v: "videolar" }, label: "Videolar", icon: "video" },
 ];
+
+/** Danışman menüsü (yan menü, üst çubuk ve hesap menüsü ortak) */
+const COUNSELOR_NAV: { v?: string; label: string; short: string; icon: IconName }[] = [
+  { label: "Öğrenciler", short: "Öğrenciler", icon: "users" },
+  { v: "gorevler", label: "Görev panosu", short: "Görevler", icon: "list" },
+  { v: "takvim", label: "Takvim", short: "Takvim", icon: "calendar" },
+  { v: "hatirlatma", label: "Hatırlatma", short: "Hatırlatma", icon: "bell" },
+  { v: "forum", label: "Soru forumu", short: "Forum", icon: "question" },
+  { v: "videolar", label: "Rehber videoları", short: "Videolar", icon: "video" },
+  { v: "ayarlar", label: "Ayarlar", short: "Ayarlar", icon: "settings" },
+];
+const counselorActive = (v: string | undefined) => (COUNSELOR_NAV.some((n) => n.v && n.v === v) ? v : undefined);
 
 function UserMenu() {
   const { profile, signOut } = useAuth();
@@ -106,16 +124,19 @@ function UserMenu() {
             <p className="truncate text-sm font-medium">{profile?.full_name}</p>
             <p className="truncate text-xs text-faint">{profile?.role === "counselor" ? "Danışman" : `@${profile?.username}`}</p>
           </div>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              go({ v: "ayarlar" });
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-2"
-          >
-            <Icon name="settings" size={16} /> Ayarlar
-          </button>
+          {(profile?.role === "counselor" ? COUNSELOR_NAV : COUNSELOR_NAV.filter((n) => n.v === "ayarlar")).map((n) => (
+            <button
+              key={n.label}
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                go(n.v ? { v: n.v } : {});
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-2"
+            >
+              <Icon name={n.icon} size={16} /> {n.label}
+            </button>
+          ))}
           <button
             role="menuitem"
             onClick={() => signOut()}
@@ -134,7 +155,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const isActive = (item: NavItem) => (item.to.v ?? "") === (route.v ?? "");
   return (
     <div className="min-h-dvh">
-      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
+      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur" style={{ viewTransitionName: "ust-cubuk" }}>
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
           <A to={{}} aria-label="Ana sayfa">
             <Logo />
@@ -145,10 +166,11 @@ export function StudentShell({ children }: { children: ReactNode }) {
                 key={item.label}
                 to={item.to}
                 className={cx(
-                  "rounded-lg px-3 py-1.5 text-sm font-medium transition",
-                  isActive(item) ? "bg-primary-soft text-primary-ink" : "text-muted hover:text-fg",
+                  "relative isolate rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  isActive(item) ? "text-primary-ink" : "text-muted hover:text-fg",
                 )}
               >
+                {isActive(item) && <NavPill name="nav-ust" />}
                 {item.label}
               </A>
             ))}
@@ -157,8 +179,8 @@ export function StudentShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 pb-28 pt-4 md:pb-12">{children}</main>
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur md:hidden" aria-label="Alt menü">
-        <div className="mx-auto grid max-w-md grid-cols-6">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur md:hidden" aria-label="Alt menü" style={{ viewTransitionName: "alt-menu" }}>
+        <div className="mx-auto grid max-w-lg grid-cols-7">
           {STUDENT_NAV.map((item) => {
             const active = isActive(item);
             return (
@@ -166,8 +188,9 @@ export function StudentShell({ children }: { children: ReactNode }) {
                 key={item.label}
                 to={item.to}
                 aria-current={active ? "page" : undefined}
-                className={cx("flex flex-col items-center gap-0.5 pb-2 pt-2.5 text-[11px] font-medium transition", active ? "text-primary" : "text-faint")}
+                className={cx("relative isolate flex flex-col items-center gap-0.5 pb-2 pt-2.5 text-[11px] font-medium transition-colors", active ? "text-primary" : "text-faint")}
               >
+                {active && <NavPill name="nav-alt" className="!inset-x-auto !bottom-auto left-1/2 top-0 h-[3px] w-8 -translate-x-1/2 rounded-b-full bg-primary" />}
                 <Icon name={item.icon} size={22} strokeWidth={active ? 2.2 : 1.8} />
                 {item.label}
               </A>
@@ -182,16 +205,13 @@ export function StudentShell({ children }: { children: ReactNode }) {
 export function CounselorShell({ children }: { children: ReactNode }) {
   const { route } = useRoute();
   const { profile, signOut } = useAuth();
-  const settings = route.v === "ayarlar";
-  const calendar = route.v === "takvim";
-  const remind = route.v === "hatirlatma";
-  const forum = route.v === "forum";
+  const current = counselorActive(route.v);
   const link = (active: boolean) =>
-    cx("hidden rounded-lg px-3 py-1.5 text-sm font-medium transition sm:inline-flex", active ? "bg-primary-soft text-primary-ink" : "text-muted hover:text-fg");
+    cx("relative isolate hidden rounded-lg px-2.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors md:inline-flex", active ? "text-primary-ink" : "text-muted hover:text-fg");
   const side = (active: boolean) =>
     cx(
-      "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition",
-      active ? "bg-primary-soft font-semibold text-primary-ink" : "font-medium text-muted hover:bg-surface-2 hover:text-fg",
+      "relative isolate flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors",
+      active ? "font-semibold text-primary-ink" : "font-medium text-muted hover:bg-surface-2 hover:text-fg",
     );
   const initials = (profile?.full_name ?? "?")
     .split(/\s+/)
@@ -202,27 +222,18 @@ export function CounselorShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh lg:flex">
       {/* Masaüstü: sol menü */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-7 border-r border-line bg-surface px-4 py-6 lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-7 border-r border-line bg-surface px-4 py-6 lg:flex" style={{ viewTransitionName: "yan-menu" }}>
         <A to={{}} aria-label="Öğrenciler" className="px-2">
           <Logo />
         </A>
         <nav className="flex flex-col gap-1" aria-label="Ana menü">
           <p className="eyebrow px-3 pb-1">Menü</p>
-          <A to={{}} className={side(!settings && !calendar && !remind && !forum)}>
-            <Icon name="users" size={18} /> Öğrenciler
-          </A>
-          <A to={{ v: "takvim" }} className={side(calendar)}>
-            <Icon name="calendar" size={18} /> Takvim
-          </A>
-          <A to={{ v: "hatirlatma" }} className={side(remind)}>
-            <Icon name="bell" size={18} /> Hatırlatma
-          </A>
-          <A to={{ v: "forum" }} className={side(forum)}>
-            <Icon name="question" size={18} /> Soru forumu
-          </A>
-          <A to={{ v: "ayarlar" }} className={side(settings)}>
-            <Icon name="settings" size={18} /> Ayarlar
-          </A>
+          {COUNSELOR_NAV.map((n) => (
+            <A key={n.label} to={n.v ? { v: n.v } : {}} className={side(current === n.v)}>
+              {current === n.v && <NavPill name="nav-yan" className="rounded-xl bg-primary-soft" />}
+              <Icon name={n.icon} size={18} /> {n.label}
+            </A>
+          ))}
         </nav>
         <div className="mt-auto flex items-center gap-2.5 border-t border-line px-1 pt-4">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary-ink">{initials}</span>
@@ -237,27 +248,18 @@ export function CounselorShell({ children }: { children: ReactNode }) {
       </aside>
       <div className="min-w-0 flex-1">
         {/* Telefon / tablet: üst çubuk */}
-        <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur lg:hidden">
+        <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur lg:hidden" style={{ viewTransitionName: "ust-cubuk" }}>
           <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
             <A to={{}} aria-label="Öğrenciler">
               <Logo />
             </A>
             <div className="flex items-center gap-1">
-              <A to={{}} className={link(!settings && !calendar && !remind && !forum)}>
-                Öğrenciler
-              </A>
-              <A to={{ v: "takvim" }} className={link(calendar)}>
-                Takvim
-              </A>
-              <A to={{ v: "hatirlatma" }} className={link(remind)}>
-                Hatırlatma
-              </A>
-              <A to={{ v: "forum" }} className={link(forum)}>
-                Forum
-              </A>
-              <A to={{ v: "ayarlar" }} className={link(settings)}>
-                Ayarlar
-              </A>
+              {COUNSELOR_NAV.filter((n) => n.v !== "ayarlar").map((n) => (
+                <A key={n.label} to={n.v ? { v: n.v } : {}} className={link(current === n.v)}>
+                  {current === n.v && <NavPill name="nav-ust" />}
+                  {n.short}
+                </A>
+              ))}
               <UserMenu />
             </div>
           </div>

@@ -201,7 +201,7 @@ export function LineChart({
             {hover != null && <line x1={hx} x2={hx} y1={pad.t} y2={pad.t + ih} style={{ stroke: "var(--axis)" }} strokeWidth={1} />}
             {visible.map((s) => (
               <g key={s.key}>
-                <path d={pathFor(s)} fill="none" style={{ stroke: s.color }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+                <path className="chart-line" pathLength={1} d={pathFor(s)} fill="none" style={{ stroke: s.color }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
                 {s.values.map((v, i) => {
                   if (v == null) return null;
                   const solo = isolated(s, i);
@@ -314,7 +314,7 @@ export function BarChart({
           ))}
           {values.map((v, i) =>
             v == null || v <= 0 ? null : (
-              <path key={i} d={barPath(i, v)} style={{ fill: color, opacity: hover == null || hover === i ? 1 : 0.55 }} />
+              <path key={i} className="chart-bar" d={barPath(i, v)} style={{ animationDelay: `${Math.min(i, 20) * 18}ms`, fill: color, opacity: hover == null || hover === i ? 1 : 0.55 }} />
             ),
           )}
           {refLine && (

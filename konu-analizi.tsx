@@ -308,7 +308,7 @@ export function TopicAnalysis({ studentId }: { studentId: string }) {
               >
                 <span className="truncate text-xs font-semibold tracking-wide">{s.name}</span>
                 <span className="relative h-2.5 overflow-hidden rounded-full bg-surface-2">
-                  {s.acc != null && <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${s.acc}%`, background: "var(--series-1)" }} />}
+                  {s.acc != null && <span className="bar-grow absolute inset-y-0 left-0 rounded-full" style={{ width: `${s.acc}%`, background: "var(--series-1)" }} />}
                 </span>
                 <span className="w-36 text-right text-xs tabular sm:w-52">
                   <span className="font-semibold">{s.acc != null ? `%${s.acc}` : "—"}</span>

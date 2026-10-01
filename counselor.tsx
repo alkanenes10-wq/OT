@@ -1,6 +1,9 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { TaskBoard } from "./gorev-panosu";
+import { SessionReport } from "./gorusme-raporu";
+import { CounselorVideos } from "./videolar";
 import { BadgesCard, BadgeStrip, fetchStudentsGame, type GameStats } from "./oyun";
 import { NotificationsCard } from "./bildirim";
 import { ParentLinksCard } from "./veli";
@@ -790,7 +793,12 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
             @{student.username}
             {student.target ? ` · Hedef: ${student.target}` : ""}
           </p>
-          <AppReminder student={student} />
+          <div className="flex flex-wrap items-center gap-2">
+            <A to={{ v: "gorusme", id: student.id }} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-semibold transition-colors hover:bg-surface-2">
+              <Icon name="note" size={16} /> Görüşme raporu
+            </A>
+            <AppReminder student={student} />
+          </div>
         </div>
       </div>
 
@@ -919,6 +927,9 @@ export function CounselorApp() {
   if (route.v === "takvim") return <CounselorCalendar />;
   if (route.v === "hatirlatma") return <ReminderCenter />;
   if (route.v === "forum") return <CounselorForum />;
+  if (route.v === "gorevler") return <TaskBoard />;
+  if (route.v === "videolar") return <CounselorVideos />;
+  if (route.v === "gorusme" && route.id) return <SessionReport key={`${route.id}-${route.t ?? ""}`} studentId={route.id} sessionId={route.t} />;
   if (route.v === "ogrenci" && route.id) return <StudentDetail key={route.id} id={route.id} tab={route.t} />;
   return <StudentList />;
 }

@@ -66,9 +66,9 @@ const TEMPLATES: { id: string; label: string; text: string }[] = [
   {
     id: "gorev",
     label: "Kalan görevler",
-    text: "Merhaba {ad}, bugünkü programında {kalan} görev kaldı: {gorevler}. Akşam bitirmeye çalışalım; zorlandığın bir yer olursa yaz, planı birlikte düzenleriz.",
+    text: "Merhaba {ad}, bugün {kalan} görevle günü tamamlayabilirsin: {gorevler}. Her biri serine ve haftalık hedefine eklenir; zorlandığın bir yer olursa yaz, planı birlikte düzenleriz.",
   },
-  { id: "gunluk", label: "Günlük takip", text: "Merhaba {ad}, bugünkü günlüğünü henüz doldurmadın. 2 dakikanı ayırıp doldurur musun? Uyku ve ruh hâlindeki örüntüleri birlikte görmemiz için önemli." },
+  { id: "gunluk", label: "Günlük takip", text: "Merhaba {ad}, 2 dakikalık günlükle bugünü kaydet, günlük serine 1 gün ekle. Uyku ve ruh hâlindeki örüntüleri birlikte görmemizi sağlıyor." },
   { id: "uzun", label: "Uzun ara", text: "Merhaba {ad}, son günlük kaydın {son_gunluk}. Nasıl gidiyor? Uygun olduğunda kısa bir görüşme yapalım mı?" },
   { id: "tebrik", label: "Tebrik", text: "Tebrikler {ad}! Bu hafta {haftalik} görev tamamladın. Böyle devam 👏" },
 ];

@@ -1,6 +1,7 @@
 "use client";
 // Tarayıcı tarafı: Supabase bağlantısı, oturum (giriş) durumu, veri okuma yardımcıları ve basit sayfa yönlendirici.
 
+import { flushSync } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { emptySchedule, type DailyLog, type ExamAnalysis, type PlanDay, type PlanTask, type Profile, type StudySchedule, type TopicProgress, type WeeklyPlan } from "./lib";
@@ -230,22 +231,40 @@ export function routeHref(r: Route): string {
   return q ? `/?${q}` : "/";
 }
 
+/** Sayfa geçişlerinde yumuşak geçiş (View Transitions). Desteklemeyen tarayıcıda ve "hareketi azalt" ayarında anında geçer. */
+export function withTransition(update: () => void) {
+  const doc = typeof document !== "undefined" ? (document as Document & { startViewTransition?: (cb: () => void) => unknown }) : null;
+  const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (!doc?.startViewTransition || reduce || doc.visibilityState !== "visible") return update();
+  try {
+    doc.startViewTransition(() => flushSync(update));
+  } catch {
+    update();
+  }
+}
+
 const RouteContext = createContext<{ route: Route; go: (r: Route, opts?: { replace?: boolean }) => void } | null>(null);
 
 export function RouterProvider({ children }: { children: ReactNode }) {
   const [route, setRoute] = useState<Route>({});
   useEffect(() => {
     setRoute(parseRoute());
-    const onPop = () => setRoute(parseRoute());
+    const onPop = () => withTransition(() => setRoute(parseRoute()));
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const go = useCallback((r: Route, opts?: { replace?: boolean }) => {
     const href = routeHref(r);
-    if (opts?.replace) window.history.replaceState(null, "", href);
-    else window.history.pushState(null, "", href);
-    setRoute(r);
-    if (!opts?.replace) window.scrollTo(0, 0);
+    if (opts?.replace) {
+      window.history.replaceState(null, "", href);
+      setRoute(r);
+      return;
+    }
+    window.history.pushState(null, "", href);
+    withTransition(() => {
+      setRoute(r);
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    });
   }, []);
   return <RouteContext.Provider value={{ route, go }}>{children}</RouteContext.Provider>;
 }

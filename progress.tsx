@@ -539,7 +539,7 @@ function StackedBars({
               const gap = va > 0 && vb > 0 ? (2 / ih) * top : 0;
               const op = hover == null || hover === i ? 1 : 0.55;
               return (
-                <g key={i} style={{ opacity: op }}>
+                <g key={i} className="chart-bar" style={{ opacity: op, animationDelay: `${Math.min(i, 20) * 18}ms` }}>
                   {va > 0 && <path d={seg(i, 0, va, vb === 0)} style={{ fill: a.color }} />}
                   {vb > 0 && <path d={seg(i, va + gap, va + vb + gap, true)} style={{ fill: b.color }} />}
                 </g>
@@ -606,7 +606,7 @@ function HBars({ rows }: { rows: [string, number][] }) {
         return (
           <li key={subject} className="grid grid-cols-[120px_1fr_76px] items-center gap-3 text-sm sm:grid-cols-[150px_1fr_90px]">
             <span className="truncate text-xs font-semibold text-muted">{subject}</span>
-            <span className="h-3 rounded-r" style={{ width: `${Math.max(2, (v / max) * 100)}%`, background: cat === "sozel" ? "var(--series-2)" : "var(--series-1)", borderRadius: "0 4px 4px 0" }} />
+            <span className="bar-grow h-3 rounded-r" style={{ width: `${Math.max(2, (v / max) * 100)}%`, background: cat === "sozel" ? "var(--series-2)" : "var(--series-1)", borderRadius: "0 4px 4px 0" }} />
             <span className="text-right tabular">
               {fmtNum(v, 0)} <span className="text-xs text-faint">%{Math.round((v / total) * 100)}</span>
             </span>

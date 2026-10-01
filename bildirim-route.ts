@@ -37,6 +37,7 @@ async function chunked<T>(ids: string[], f: (c: string[]) => PromiseLike<{ data:
   return out;
 }
 
+
 export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> }) {
   const { tur } = await ctx.params;
   const secret = process.env.CRON_SECRET;
@@ -70,18 +71,31 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
   if (tur === "gunluk" || tur === "gorev") {
     const students = profiles.filter((p) => p.role === "student" && p.is_active && wants(p.id, tur));
     const ids = students.map((s) => s.id);
+    // Seri bilgisi (guncelleme-14: notify_streaks). Yoksa sayısız, yine kazanç odaklı metin kullanılır.
+    type St = { student_id: string; streak: number; log_streak: number; active_today: boolean; log_today: boolean };
+    const st = new Map<string, St>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await db.rpc("notify_streaks", { ids: ids.slice(i, i + 200) });
+      for (const r of (data ?? []) as St[]) st.set(r.student_id, r);
+    }
     if (tur === "gunluk") {
       const logged = new Set(
         (await chunked<{ student_id: string }>(ids, (c) => db.from("daily_logs").select("student_id").in("student_id", c).eq("log_date", today))).map((x) => x.student_id),
       );
-      for (const s of students)
-        if (!logged.has(s.id))
-          messages.set(s.id, {
-            title: "Günlük takibin seni bekliyor",
-            body: `${s.full_name.split(" ")[0]}, bugünü 2 dakikada kaydet: uyku, telefon, ruh hâli. Serini de korursun.`,
-            url: "/?v=gunluk",
-            tag: "gunluk",
-          });
+      for (const s of students) {
+        const x = st.get(s.id);
+        if (logged.has(s.id)) continue;
+        const n = x?.log_streak ?? 0;
+        const ad = s.full_name.split(" ")[0];
+        messages.set(s.id, {
+          title: n ? `Günlük serine 1 gün ekle: ${n + 1}. gün` : "Bugünü kaydet, yeni serini başlat",
+          body: n
+            ? `${ad}, 2 dakikalık günlükle serin ${n} günden ${n + 1} güne çıksın. Uyku, telefon ve ruh hâlini kaydetmen yeterli.`
+            : `${ad}, 2 dakikalık günlükle bugün yeni bir seri başlat. Uyku, telefon ve ruh hâlini kaydetmen yeterli.`,
+          url: "/?v=gunluk",
+          tag: "gunluk",
+        });
+      }
     } else {
       const plans = await chunked<{ id: string; student_id: string; start_date: string }>(ids, (c) =>
         db.from("weekly_plans").select("id, student_id, start_date").in("student_id", c).gte("start_date", addDays(today, -6)).lte("start_date", today),
@@ -102,12 +116,24 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
         const left = todays.filter((t) => !t.done);
         if (!todays.length || !left.length) continue;
         const names = left.slice(0, 2).map((t) => t.subject);
-        messages.set(s.id, {
-          title: `Bugün ${left.length} görevin kaldı`,
-          body: `${names.join(", ")}${left.length > 2 ? " ve diğerleri" : ""}. En kolayından 5 dakikayla başla.`,
-          url: "/",
-          tag: "gorev",
-        });
+        const list = `${names.join(", ")}${left.length > 2 ? " ve diğerleri" : ""}`;
+        const n = st.get(s.id)?.streak ?? 0;
+        const doneToday = todays.length - left.length;
+        messages.set(s.id, st.get(s.id)?.active_today || doneToday > 0
+          ? {
+              title: doneToday ? `Bugün ${doneToday}/${todays.length} görev tamam` : `Bugün ${todays.length} görevin hazır`,
+              body: `${left.length} görev${doneToday ? " daha" : ""} ile günü tamamla: ${list}. Her görev haftalık ve aylık hedefine eklenir.`,
+              url: "/",
+              tag: "gorev",
+            }
+          : {
+              title: n ? `Bugün 1 görevle serine 1 gün ekle` : "Bugün 1 görevle serini başlat",
+              body: n
+                ? `Serin ${n} günden ${n + 1} güne çıksın. Sıradakiler: ${list}. En kolayından 5 dakikayla başla.`
+                : `Sıradakiler: ${list}. En kolayından 5 dakikayla başla, serinin 1. günü bugün olsun.`,
+              url: "/",
+              tag: "gorev",
+            });
       }
     }
   } else {

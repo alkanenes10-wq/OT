@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { COURSES, courseTopicIds, isCompleted, STATUS_LABELS, STATUS_ORDER, type Topic, type TopicStatus } from "./curriculum";
 import { errorText, fetchTopicProgress, sb } from "./db";
 import { downloadCSV, formatTR, pct, todayISO, type TopicProgress } from "./lib";
+import { KAZANIMLAR } from "./kazanimlar";
+import { TopicOutcomes } from "./konu-bilgi";
 import { Badge, Button, cx, ErrorBox, Icon, PageLoader, ProgressBar, Segmented, useToast } from "./ui";
 
 const STATUS_STYLE: Record<TopicStatus, string> = {
@@ -201,6 +203,7 @@ export function TopicTracker({ studentId, studentName }: { studentId: string; st
                             <span className={cx("block text-[15px] leading-snug", isCompleted(status) && "text-muted")}>{t.name}</span>
                             <span className="block text-xs text-faint">
                               {t.q ? `Soru: ${t.q}${t.shared ? " (ortak)" : ""}` : "Soru sayısı: —"}
+                              {KAZANIMLAR[t.id] ? ` · ${KAZANIMLAR[t.id].length} kazanım` : ""}
                               {p?.note ? " · not var" : ""}
                             </span>
                           </span>
@@ -236,12 +239,7 @@ function TopicDetail({ topic, note, onSaveNote }: { topic: Topic; note: string; 
   const [saving, setSaving] = useState(false);
   return (
     <div className="space-y-3 bg-surface-2 px-4 py-3 text-sm">
-      {topic.sub && (
-        <div>
-          <p className="text-xs font-medium text-muted">Alt başlıklar</p>
-          <p className="mt-0.5">{topic.sub}</p>
-        </div>
-      )}
+      <TopicOutcomes topicId={topic.id} />
       {topic.desc && (
         <div>
           <p className="text-xs font-medium text-muted">Açıklama / soru türü</p>

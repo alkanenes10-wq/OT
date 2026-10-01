@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-13.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-15.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,28 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 3.2 — görev panosu, görüşme raporu, kazanımlar, rehber videoları
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-15.sql` → **Run**. Yeni dosyalar: `kazanimlar.ts`, `konu-bilgi.tsx`, `gorev-panosu.tsx`, `gorusme-raporu.tsx`, `videolar.tsx`.
+- **Görev panosu** (danışman menüsü): tüm öğrencilerin görevleri tek ekranda — Geciken / Bugün / Yaklaşan / Tamamlanan; öğrenci, ders ve metin filtresi; gecikenlere tek tuşla bildirim.
+- **Görüşme raporu**: Takvimdeki görüşmenin yanındaki ya da öğrenci sayfasındaki "Görüşme raporu" düğmesi. Son görüşmeden bu yana süre, soru, doğruluk, tamamlama, aktif gün, günlük örüntüleri, denemeler, biten ve zorlanılan konular, geciken görevler ve "görüşmede konuşulabilecekler" listesi. Not görüşmeye kaydedilir; yazdırılır / PDF kaydedilir.
+- **Kazanımlar ve alt başlıklar**: 182 konunun hepsi için. Konu takibinde konuya dokununca, program görevlerinde ve görev panosunda "Kazanımlar" ile görünür. Düzenlemek için `kazanimlar.ts`.
+- **Rehber videoları**: Danışman YouTube bağlantısı ekler (erteleme, sınav kaygısı, zaman yönetimi, motivasyon, uyku, telefon). Öğrenci alt menüdeki "Videolar" sayfasında izler. Son 3 günün günlüğünde erteleme, plan değişikliği, kaygı ≥ 4, motivasyon ≤ 2, 6 saatten az uyku ya da 3 saatten fazla telefon varsa ilgili videolar ana ekranda "Senin için videolar" olarak önerilir.
+
+## Güncelleme 3.1 — akıcı geçişler
+
+SQL gerekmez. Sayfa geçişlerinde içerik yumuşakça belirir ve menüdeki seçili arka plan yeni sayfaya kayar; sekme ve segment seçicilerde seçim kayarak geçer; kartlar, pencereler, bildirimler, ilerleme çubukları ve grafikler animasyonla açılır. Cihazda "hareketi azalt" ayarı açıksa animasyonlar kapanır. Sayfa geçişi Chrome, Edge ve Safari 18+'da çalışır; diğer tarayıcılarda anında geçer.
+
+## Güncelleme 3.0 — aylık hedefler, konu ve özel gün rozetleri, kutlamalar
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-14.sql` → **Run** (`guncelleme-13.sql` daha önce çalıştırılmış olmalı).
+- **Aylık hedef:** Her öğrencinin bu ay için soru ve aktif gün hedefi var. Danışman girmezse otomatik: soru = geçen ayın %10 fazlası (en az 200), aktif gün = geçen ayın 2 fazlası (en az 12, en fazla ayın gün sayısı − 4). Danışman, öğrencinin Özet sekmesindeki "Seri, hedef ve rozetler" kartından elle değiştirebilir. Hedefe ulaşılan her ay bir ay rozeti + "Aylık hedef" rozet serisi.
+- **Konu bitirme** (1, 10, 25, 50, 100 konu, sonra her 50) ve **ders tamamlama** rozetleri (bir dersin tüm konuları "Bitti/Tekrar edildi" olunca, 17 ders).
+- **Özel gün rozetleri** (yalnızca o gün kazanılır): 1 Ocak, 14 Mart, 23 Nisan, 19 Mayıs, 30 Ağustos, 29 Ekim, 24 Kasım.
+- **Büyük kutlama** yalnızca 7, 30 ve 100 günlük çalışma/günlük serisinde; diğer rozetler kısa bildirimle duyurulur.
+- Bildirim ve kart metinleri kazanç odaklı ("Bugün 1 görevle serine 1 gün ekle").
+- Logo: sekme ve ana ekran simgesi, üst menüdeki logoyla aynı tasarıma getirildi; logo artık renk paletinden bağımsız sabit marka rengini kullanır.
 
 ## Güncelleme 2.9 — günlük rozetleri ve sınırsız rozetler
 

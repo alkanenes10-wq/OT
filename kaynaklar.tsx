@@ -164,7 +164,7 @@ export function ResourceTracker({ studentId, audience = "counselor" }: { student
                           {r.status === "done" ? <Badge tone="success">Bitti</Badge> : r.status === "paused" ? <Badge>Ara verildi</Badge> : null}
                         </div>
                         <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-surface-2">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${pctDone ?? 0}%` }} />
+                          <div className="bar-grow h-full rounded-full bg-primary" style={{ width: `${pctDone ?? 0}%` }} />
                         </div>
                         <div className="mt-1.5 flex justify-between text-xs text-muted tabular">
                           <span>

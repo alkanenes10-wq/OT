@@ -227,7 +227,7 @@ export function ParentReport({ student }: { student: Profile }) {
                     <td className="py-1.5">
                       <span className="inline-flex items-center gap-2">
                         <span className="inline-block h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
-                          <span className="block h-full bg-primary" style={{ width: `${Math.round((e.d / e.n) * 100)}%` }} />
+                          <span className="bar-grow block h-full bg-primary" style={{ width: `${Math.round((e.d / e.n) * 100)}%` }} />
                         </span>
                         <span className="tabular">
                           {e.d}/{e.n}
@@ -256,7 +256,7 @@ export function ParentReport({ student }: { student: Profile }) {
                       </span>
                     </div>
                     <span className="mt-0.5 block h-1.5 overflow-hidden rounded-full bg-surface-2">
-                      <span className="block h-full bg-success" style={{ width: `${Math.round((c.done / c.total) * 100)}%` }} />
+                      <span className="bar-grow block h-full bg-success" style={{ width: `${Math.round((c.done / c.total) * 100)}%` }} />
                     </span>
                   </li>
                 ))}

@@ -7,12 +7,14 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
   type ReactNode,
   type SVGProps,
 } from "react";
+import { createPortal } from "react-dom";
 import { A, type Route } from "./db";
 
 /* ---------------- Simgeler ---------------- */
@@ -387,6 +389,28 @@ export function Field({
   );
 }
 
+/* ---------------- Kayan seçim göstergesi (sekme / segment) ---------------- */
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+/** Etkin düğmenin altında kayarak hareket eden arka plan için konum ölçer */
+function useSlider(active: number) {
+  const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; w: number; ready: boolean } | null>(null);
+  useIsoLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const btn = el.querySelectorAll<HTMLElement>("[data-slide]")[active];
+      if (!btn) return setPos(null);
+      setPos((p) => ({ x: btn.offsetLeft, w: btn.offsetWidth, ready: p != null }));
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [active]);
+  return { box, pos };
+}
+
 export function Segmented<T extends string | number | boolean | null>({
   options,
   value,
@@ -400,8 +424,16 @@ export function Segmented<T extends string | number | boolean | null>({
   ariaLabel?: string;
   size?: "sm" | "md";
 }) {
+  const { box, pos } = useSlider(options.findIndex((o) => o.value === value));
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="inline-flex w-full rounded-xl border border-line bg-surface-2 p-1">
+    <div ref={box} role="radiogroup" aria-label={ariaLabel} className="relative inline-flex w-full rounded-xl border border-line bg-surface-2 p-1">
+      {pos && (
+        <span
+          aria-hidden
+          className={cx("pointer-events-none absolute bottom-1 top-1 left-0 rounded-lg bg-surface shadow-sm ring-1 ring-line", pos.ready && "slide-ind")}
+          style={{ transform: `translateX(${pos.x}px)`, width: pos.w }}
+        />
+      )}
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -409,12 +441,13 @@ export function Segmented<T extends string | number | boolean | null>({
             key={String(o.value)}
             type="button"
             role="radio"
+            data-slide
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={cx(
-              "flex-1 rounded-lg font-medium transition",
+              "relative flex-1 rounded-lg font-medium transition-colors duration-200",
               size === "sm" ? "h-8 px-2 text-sm" : "h-10 px-3 text-[15px]",
-              active ? "bg-surface text-fg shadow-sm ring-1 ring-line" : "text-muted hover:text-fg",
+              active ? cx("text-fg", !pos && "bg-surface shadow-sm ring-1 ring-line") : "text-muted hover:text-fg",
             )}
           >
             {o.label}
@@ -506,7 +539,7 @@ export function ProgressBar({ value, tone = "primary", label }: { value: number 
       aria-label={label}
     >
       <div
-        className={cx("h-full rounded-full transition-all", tone === "success" ? "bg-success" : "bg-primary")}
+        className={cx("bar-grow h-full rounded-full", tone === "success" ? "bg-success" : "bg-primary")}
         style={{ width: `${v}%` }}
       />
     </div>
@@ -582,16 +615,17 @@ export function Modal({
     };
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // Belgenin köküne taşınır: animasyonlu kartların içinde açılsa bile ekranı doğru kaplar
+  return portal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-      <button aria-label="Kapat" className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <button aria-label="Kapat" className="anim-fade absolute inset-0 bg-black/40" onClick={onClose} />
       <div
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={id}
-        className="relative flex max-h-[90dvh] w-full flex-col rounded-t-3xl bg-surface shadow-xl outline-none sm:max-w-lg sm:rounded-3xl"
+        className="anim-sheet relative flex max-h-[90dvh] w-full flex-col rounded-t-3xl bg-surface shadow-xl outline-none sm:max-w-lg sm:rounded-3xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
           <h2 id={id} className="text-base font-semibold">
@@ -602,12 +636,17 @@ export function Modal({
         <div className="overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-3 pb-safe">{footer}</div>}
       </div>
-    </div>
+    </div>,
   );
 }
 
+/** Tarayıcıda document.body'ye taşır (sunucuda olduğu gibi döner) */
+export function portal(node: ReactNode) {
+  return typeof document === "undefined" ? node : createPortal(node, document.body);
+}
+
 /* ---------------- Bildirim (toast) ---------------- */
-type ToastItem = { id: number; text: string; tone: "success" | "danger" | "neutral" };
+type ToastItem = { id: number; text: string; tone: "success" | "danger" | "neutral"; leaving?: boolean };
 const ToastCtx = createContext<{ show: (text: string, tone?: ToastItem["tone"]) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -615,7 +654,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((text: string, tone: ToastItem["tone"] = "success") => {
     const id = Date.now() + Math.random();
     setItems((s) => [...s, { id, text, tone }]);
-    setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), tone === "danger" ? 5000 : 2600);
+    const life = tone === "danger" ? 5000 : 2600;
+    setTimeout(() => setItems((s) => s.map((t) => (t.id === id ? { ...t, leaving: true } : t))), life - 220);
+    setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), life);
   }, []);
   return (
     <ToastCtx.Provider value={{ show }}>
@@ -629,6 +670,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={cx(
               "pointer-events-auto flex max-w-md items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-lg",
+              t.leaving ? "anim-toast-out" : "anim-toast-in",
               t.tone === "danger" ? "bg-danger text-white" : "bg-fg text-bg",
             )}
           >
@@ -657,9 +699,17 @@ export function Tabs<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const { box, pos } = useSlider(tabs.findIndex((t) => t.value === value));
   return (
     <div className="no-scrollbar -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div role="tablist" className="inline-flex gap-1 rounded-full border border-line bg-surface p-1 shadow-[var(--shadow-sm)]">
+      <div ref={box} role="tablist" className="relative inline-flex gap-1 rounded-full border border-line bg-surface p-1 shadow-[var(--shadow-sm)]">
+        {pos && (
+          <span
+            aria-hidden
+            className={cx("pointer-events-none absolute bottom-1 top-1 left-0 rounded-full bg-primary shadow-[var(--shadow-sm)]", pos.ready && "slide-ind")}
+            style={{ transform: `translateX(${pos.x}px)`, width: pos.w }}
+          />
+        )}
         {tabs.map((t) => {
           const active = t.value === value;
           return (
@@ -667,11 +717,12 @@ export function Tabs<T extends string>({
               key={t.value}
               role="tab"
               type="button"
+              data-slide
               aria-selected={active}
               onClick={() => onChange(t.value)}
               className={cx(
-                "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium whitespace-nowrap transition",
-                active ? "bg-primary text-primary-fg shadow-[var(--shadow-sm)]" : "text-muted hover:bg-surface-2 hover:text-fg",
+                "relative inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors duration-200",
+                active ? cx("text-primary-fg", !pos && "bg-primary shadow-[var(--shadow-sm)]") : "text-muted hover:bg-surface-2 hover:text-fg",
               )}
             >
               {t.icon && <Icon name={t.icon} size={16} />}

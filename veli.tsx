@@ -232,7 +232,7 @@ function ParentContent({ d }: { d: ParentData }) {
                   </span>
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((c.fin / c.total) * 100)}%` }} />
+                  <div className="bar-grow h-full rounded-full bg-primary" style={{ width: `${Math.round((c.fin / c.total) * 100)}%` }} />
                 </div>
               </li>
             ))}

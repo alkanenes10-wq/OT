@@ -1,6 +1,7 @@
 "use client";
 // Öğrenci ekranları: Bugün, Program, Günlük, Konular, İlerleme, Ayarlar.
 
+import { StudentVideos, VideoSuggestionsCard } from "./videolar";
 import { BadgesCard, StreakCard } from "./oyun";
 import { NotificationsCard } from "./bildirim";
 import { ForumBoard } from "./forum";
@@ -121,6 +122,7 @@ function Today() {
       <NextSessionCard />
       {profile && <StudentNotes studentId={profile.id} />}
       {profile && <StreakCard studentId={profile.id} />}
+      <VideoSuggestionsCard />
       {error && <ErrorBox>{error}</ErrorBox>}
 
       {yesterdayLog?.tomorrow_change && (
@@ -382,6 +384,8 @@ export function StudentApp() {
       return <Questions />;
     case "ilerleme":
       return <Progress />;
+    case "videolar":
+      return <StudentVideos />;
     case "ayarlar":
       return <Settings />;
     default:

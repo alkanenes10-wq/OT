@@ -178,6 +178,9 @@ export function CounselorCalendar() {
                     Hatırlatıldı
                   </Badge>
                 ) : null}
+                <A to={{ v: "gorusme", id: s.student_id, t: s.id }} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-semibold transition-colors hover:bg-surface-2">
+                  <Icon name="note" size={16} /> Görüşme raporu
+                </A>
                 <Button size="sm" variant={s.reminded_at ? "ghost" : "primary"} icon="bell" onClick={() => remind(s)}>
                   {s.reminded_at ? "Tekrar" : "Bildirimle hatırlat"}
                 </Button>
