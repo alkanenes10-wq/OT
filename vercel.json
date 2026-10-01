@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/bildirim/gorev", "schedule": "0 15 * * *" },
+    { "path": "/api/bildirim/gunluk", "schedule": "0 18 * * *" },
+    { "path": "/api/bildirim/ozet", "schedule": "30 18 * * *" }
+  ]
+}

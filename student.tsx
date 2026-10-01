@@ -1,6 +1,8 @@
 "use client";
 // Öğrenci ekranları: Bugün, Program, Günlük, Konular, İlerleme, Ayarlar.
 
+import { BadgesCard, StreakCard } from "./oyun";
+import { NotificationsCard } from "./bildirim";
 import { ForumBoard } from "./forum";
 import { AppearanceCard } from "./theme";
 import { useEffect, useState } from "react";
@@ -118,6 +120,7 @@ function Today() {
       <EveningNudge hasTodayLog={Boolean(todayLog)} onOpen={() => go({ v: "gunluk" })} />
       <NextSessionCard />
       {profile && <StudentNotes studentId={profile.id} />}
+      {profile && <StreakCard studentId={profile.id} />}
       {error && <ErrorBox>{error}</ErrorBox>}
 
       {yesterdayLog?.tomorrow_change && (
@@ -308,6 +311,9 @@ function Progress() {
   return (
     <>
       <PageHeader title="İlerleme" />
+      <div className="mb-4">
+        <BadgesCard studentId={profile.id} />
+      </div>
       <StudentInsights studentId={profile.id} />
     </>
   );
@@ -343,6 +349,7 @@ function Settings() {
         <p className="mt-3 text-xs text-faint">Bilgilerini danışmanın güncelleyebilir.</p>
       </Card>
       <AppearanceCard />
+      <NotificationsCard />
       <DailyReminderCard />
       <ChangeOwnPassword />
       <Button variant="danger" icon="logout" className="w-full" onClick={() => signOut()}>

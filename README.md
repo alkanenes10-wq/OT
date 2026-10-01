@@ -7,7 +7,7 @@ YKS öğrencilerinin akademik (haftalık program, konu takibi) ve psikolojik (uy
 Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `hazirla.mjs` betiği uygulama dosyalarını otomatik olarak `app` klasörüne yerleştirir; bu yüzden GitHub'a nasıl yüklediğin önemli değildir.
 
 - `schema.sql` → Supabase'de **bir kez** çalıştırılacak veritabanı dosyası
-- `guncelleme-2.sql` … `guncelleme-10.sql` → mevcut kurulumlar için güncelleme dosyaları
+- `guncelleme-2.sql` … `guncelleme-11.sql` → mevcut kurulumlar için güncelleme dosyaları
 - `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `hazirla.mjs` → ayar dosyaları
 - Diğer `.tsx / .ts / .css / .png` dosyaları → uygulamanın kendisi
 
@@ -46,6 +46,23 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 1. Vercel adresini aç → giriş sayfasındaki **"Danışman hesabı oluştur"** → `SETUP_SECRET` + bilgilerin. (Yalnızca bir kez yapılır.)
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
+
+## Güncelleme 2.8 — veli bağlantısı, otomatik bildirimler, seri ve rozetler
+
+Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-11.sql` → **Run**.
+Yeni dosyalar: `veli.tsx`, `bildirim.tsx`, `oyun.tsx`, `sw-route.ts`, `bildirim-route.ts`, `vercel.json` (hepsi aynı yere, düz yüklenir; `hazirla.mjs` doğru klasörlere taşır).
+
+**Veli bağlantısı** — Öğrenci → Hesap → "Veli bağlantısı" → Bağlantı oluştur → "Veliye WhatsApp'tan gönder". Veli giriş yapmadan yalnızca o öğrencinin haftalık programını, deneme netlerini, çalışma/soru/tamamlama grafiklerini ve uyku/telefon ortalamalarını görür. Düzenleme yapamaz; kaygı, motivasyon, notlar, destek kayıtları ve soru fotoğrafları gösterilmez. Bağlantı istendiğinde iptal edilir; kaç kez açıldığı görünür.
+
+**Otomatik bildirimler (bir kez kurulum)**
+1. Danışman → Ayarlar → Bildirimler → "Anahtarları üret".
+2. Vercel → Proje → Settings → Environment Variables'a ekleyin: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (ör. `mailto:siz@eposta.com`), `CRON_SECRET`. Ayrıca `SUPABASE_SECRET_KEY` (veya `SUPABASE_SERVICE_ROLE_KEY`) tanımlı olmalı (danışman ekleme için zaten eklenmiş olabilir).
+3. Deployments → son dağıtım → Redeploy.
+4. Öğrenciler ve danışmanlar Ayarlar → Bildirimler → "Bildirimleri aç". iPhone'da önce Safari → Paylaş → Ana Ekrana Ekle, sonra uygulamayı ana ekrandan açıp bildirimleri açmak gerekir (iOS 16.4+).
+
+Zamanlar (Vercel ücretsiz planında belirtilen saat içinde herhangi bir dakikada çalışır): kalan görev hatırlatması ~18:00–19:00, günlük takip hatırlatması ~21:00–22:00, danışman akşam özeti ~21:00–22:00. Her kişi ayarlardan türleri tek tek kapatabilir. Aynı gün aynı bildirim iki kez gitmez.
+
+**Seri ve rozetler** — Bir gün, günlük takip doldurulduysa ya da en az bir görev bitirildiyse "seri günü" sayılır. Bugün ekranında seri, haftalık %80 hedefi ve son rozetler; İlerleme ekranında 14 rozetin tamamı. Anonim sıralama ("serinle ilk %20'desin") yalnızca en az 10 aktif öğrenci varken ve öğrenci ilk %50'deyse gösterilir; kimsenin adı veya puanı görünmez. Danışman, öğrencinin Özet sekmesinde seri/rozetleri ve anonim sırasını görür.
 
 ## Güncelleme 2.7 — konu ilerlemesi ve çalışma saatlerine otomatik yerleştirme
 

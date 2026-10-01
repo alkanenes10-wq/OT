@@ -45,7 +45,16 @@ const APP_FILES = [
   "forum.tsx",
   "katalog.tsx",
   "yerlestir.ts",
+  "veli.tsx",
+  "bildirim.tsx",
+  "oyun.tsx",
 ];
+
+// Alt klasör isteyen dosyalar (düz yüklemedeki adı → app içindeki yeri)
+const NESTED = {
+  "sw-route.ts": "app/sw.js/route.ts",
+  "bildirim-route.ts": "app/api/bildirim/[tur]/route.ts",
+};
 
 mkdirSync("app", { recursive: true });
 
@@ -57,7 +66,15 @@ for (const f of APP_FILES) {
   }
 }
 
-const missing = APP_FILES.filter((f) => !existsSync(`app/${f}`));
+for (const [flat, target] of Object.entries(NESTED)) {
+  if (existsSync(flat)) {
+    mkdirSync(target.slice(0, target.lastIndexOf("/")), { recursive: true });
+    renameSync(flat, target);
+    moved++;
+  }
+}
+
+const missing = [...APP_FILES.filter((f) => !existsSync(`app/${f}`)), ...Object.entries(NESTED).filter(([, t]) => !existsSync(t)).map(([f]) => f)];
 if (missing.length) {
   console.error("\n[hazirla] EKSİK DOSYA: " + missing.join(", "));
   console.error("[hazirla] Bu dosyaları GitHub deposuna yükleyip tekrar deneyin.\n");

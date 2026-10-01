@@ -1,6 +1,9 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { BadgesCard } from "./oyun";
+import { NotificationsCard } from "./bildirim";
+import { ParentLinksCard } from "./veli";
 import { CatalogManager } from "./katalog";
 import { CounselorForum } from "./forum";
 import { ReminderCenter, StudentContactCard } from "./hatirlatma";
@@ -789,6 +792,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           <div className="space-y-4">
             <SupportPanel studentId={student.id} />
             <StudentInsights studentId={student.id} showSignals />
+            <BadgesCard studentId={student.id} />
           </div>
         )}
         {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} field={student.field} />}
@@ -837,6 +841,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           <div className="max-w-3xl">
             <div className="space-y-4">
               <StudentContactCard studentId={student.id} />
+              <ParentLinksCard studentId={student.id} studentName={student.full_name} />
               <StudentAccount student={student} onChanged={load} />
             </div>
           </div>
@@ -878,6 +883,7 @@ function CounselorSettings() {
         </div>
       </Card>
       <AppearanceCard />
+      <NotificationsCard />
       <CatalogManager />
       <CounselorTeam />
       <ChangeOwnPassword />

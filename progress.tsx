@@ -618,7 +618,7 @@ function HBars({ rows }: { rows: [string, number][] }) {
 }
 
 /** Deneme netleri: TYT ve AYT ayrı grafikler (ölçekleri farklı, tek eksen) */
-function ExamTrends({ exams }: { exams: ExamAnalysis[] }) {
+export function ExamTrends({ exams }: { exams: Pick<ExamAnalysis, "exam_date" | "exam_type" | "nets">[] }) {
   const items = (["TYT", "AYT"] as const)
     .map((t) => {
       const list = exams.filter((e) => e.exam_type === t).sort((a, b) => a.exam_date.localeCompare(b.exam_date));
@@ -655,7 +655,7 @@ function ExamTrends({ exams }: { exams: ExamAnalysis[] }) {
   );
 }
 
-function netOf(a: ExamAnalysis): number | null {
+function netOf(a: Pick<ExamAnalysis, "nets">): number | null {
   const v = Object.values(a.nets ?? {}).map((x) => net(x.d, x.y));
   if (!v.some((x) => x != null)) return null;
   return Math.round(v.reduce<number>((s, x) => s + (x ?? 0), 0) * 100) / 100;
