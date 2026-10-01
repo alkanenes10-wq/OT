@@ -2,6 +2,7 @@
 //   /api/bildirim/gorev   → bugünkü görevleri bitmemiş öğrencilere (TR ~18:00)
 //   /api/bildirim/gunluk  → günlük takibini doldurmamış öğrencilere (TR ~21:00)
 //   /api/bildirim/ozet    → danışmana akşam özeti (TR ~21:30)
+//   POST /api/bildirim/gonder → danışmanın seçtiği öğrencilere anında uygulama bildirimi + uygulama içi not
 // Güvenlik: Vercel, CRON_SECRET ortam değişkenini "Authorization: Bearer …" başlığıyla gönderir.
 // Not: GitHub'a düz yüklemede bu dosyanın adı "bildirim-route.ts"dir; hazirla.mjs onu doğru klasöre taşır.
 
@@ -150,4 +151,85 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
     }
   }
   return Response.json({ ok: true, tur, day: today, recipients: messages.size, sent, removed });
+}
+
+/* ------------------------------------------------------------------ */
+/* Danışmandan öğrencilere anında bildirim                              */
+/* ------------------------------------------------------------------ */
+export async function POST(req: Request, ctx: { params: Promise<{ tur: string }> }) {
+  const { tur } = await ctx.params;
+  if (tur !== "gonder") return new Response("Not found", { status: 404 });
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!url || !anon || !token) return Response.json({ ok: false, error: "Oturum gerekli" }, { status: 401 });
+
+  let body: { student_ids?: string[]; items?: { student_id: string; message: string }[]; title?: string; message?: string; check_only?: boolean };
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ ok: false, error: "Geçersiz istek" }, { status: 400 });
+  }
+  const perStudent = new Map((body.items ?? []).filter((i) => i && typeof i.student_id === "string").map((i) => [i.student_id, String(i.message ?? "").trim().slice(0, 1000)]));
+  const ids = [...new Set([...(body.student_ids ?? []), ...perStudent.keys()].filter((x) => typeof x === "string"))].slice(0, 500);
+  if (!ids.length) return Response.json({ ok: false, error: "Öğrenci seçilmedi" }, { status: 400 });
+
+  // Kullanıcının kendi yetkisiyle: danışman mı, bu öğrenciler onun mu? (RLS)
+  const userDb = createClient(url, anon, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data: u } = await userDb.auth.getUser(token);
+  if (!u.user) return Response.json({ ok: false, error: "Oturum geçersiz" }, { status: 401 });
+  const { data: me } = await userDb.from("profiles").select("role").eq("id", u.user.id).maybeSingle();
+  if ((me as { role?: string } | null)?.role !== "counselor") return Response.json({ ok: false, error: "Yalnızca danışmanlar" }, { status: 403 });
+  const mine = await chunked<{ id: string; full_name: string }>(ids, (c) => userDb.from("profiles").select("id, full_name").eq("role", "student").eq("counselor_id", u.user!.id).in("id", c));
+  const allowed = new Set(mine.map((m) => m.id));
+
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const priv = process.env.VAPID_PRIVATE_KEY;
+  const pushReady = Boolean(key && pub && priv);
+  let subs: Sub[] = [];
+  if (pushReady) {
+    const admin = createClient(url, key!, { auth: { persistSession: false } });
+    subs = await chunked<Sub>([...allowed], (c) => admin.from("push_subscriptions").select("id, user_id, endpoint, p256dh, auth").in("user_id", c));
+  }
+  const withPush = new Set(subs.map((s) => s.user_id));
+  if (body.check_only) return Response.json({ ok: true, push_ready: pushReady, enabled: [...withPush] });
+
+  const message = String(body.message ?? "").trim().slice(0, 1000);
+  if (!message && !perStudent.size) return Response.json({ ok: false, error: "Mesaj boş" }, { status: 400 });
+  const title = String(body.title ?? "Danışmanından mesaj").slice(0, 80);
+
+  // 1) Uygulama içi not (her durumda; öğrenci Bugün ekranında görür)
+  const firstName = new Map(mine.map((m) => [m.id, m.full_name.split(" ")[0]]));
+  const personal = (sid: string) => (perStudent.get(sid) || message).replaceAll("{ad}", firstName.get(sid) ?? "");
+  const targets = [...allowed].filter((sid) => personal(sid));
+  const { error: noteErr } = await userDb.from("shared_notes").insert(targets.map((sid) => ({ student_id: sid, body: personal(sid) })));
+
+  // 2) Anlık bildirim (bildirimi açık cihazlara)
+  let sent = 0;
+  if (pushReady && subs.length) {
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:destek@example.com", pub!, priv!);
+    const admin = createClient(url, key!, { auth: { persistSession: false } });
+    for (const s of subs.filter((x) => targets.includes(x.user_id))) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          JSON.stringify({ title, body: personal(s.user_id).slice(0, 180), url: "/", tag: `not-${Date.now()}` }),
+          { TTL: 24 * 3600, urgency: "high" },
+        );
+        sent++;
+      } catch (e) {
+        const code = (e as { statusCode?: number }).statusCode;
+        if (code === 404 || code === 410) await admin.from("push_subscriptions").delete().eq("id", s.id);
+      }
+    }
+  }
+  return Response.json({
+    ok: !noteErr,
+    error: noteErr?.message,
+    push_ready: pushReady,
+    students: allowed.size,
+    notified: [...withPush].filter((x) => allowed.has(x)).length,
+    sent,
+  });
 }

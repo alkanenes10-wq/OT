@@ -47,6 +47,14 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncelleme 2.8.1 — hatırlatmalar uygulama üzerinden
+
+SQL gerekmez. Öğrenciye giden tüm hatırlatmalar artık WhatsApp yerine uygulama üzerinden gider: mesaj öğrencinin Bugün ekranına not olarak düşer, bildirimi açık olanların telefonuna anlık bildirim de gider.
+- Öğrenci sayfası → **Bildirim gönder** (eski "WhatsApp hatırlatma").
+- **Hatırlatma** sayfası → satırdaki **Gönder** ya da **Seçilenlere gönder**; bildirimi kapalı öğrenciler "Bildirimi kapalı" etiketiyle görünür.
+- Görüşmeler ve Takvim → **Bildirimle hatırlat**.
+- Velilere giden veli bağlantısı ve veli raporu paylaşımı WhatsApp'ta kalır (veliler uygulama kullanıcısı değildir).
+
 ## Güncelleme 2.8 — veli bağlantısı, otomatik bildirimler, seri ve rozetler
 
 Yüklerken **bir kez**: Supabase → SQL Editor → `guncelleme-11.sql` → **Run**.

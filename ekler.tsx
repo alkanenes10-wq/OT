@@ -1,8 +1,8 @@
 "use client";
 // v1.9 eklemeleri: YKS geri sayımı, 5 dakika başlama modu, akşam hatırlatması,
-// telefona günlük hatırlatıcı (.ics), WhatsApp hatırlatma şablonları ve görüşme takvimi.
+// telefona günlük hatırlatıcı (.ics), bildirim şablonları ve görüşme takvimi.
 
-import { normalizePhone, waTo } from "./hatirlatma";
+import { pushStatus, sendToStudents } from "./bildirim";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText, fetchLogs, fetchPlans, sb } from "./db";
 import { addDays, diffDays, formatLong, isRealTask, pickCurrentPlan, type PlanTask, type Profile, todayISO } from "./lib";
@@ -534,9 +534,21 @@ export function CounselorSessions({ student }: { student: Profile }) {
                   {MODE_LABEL[s.mode]} · {s.duration_min} dk{s.topic ? ` · ${s.topic}` : ""}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <a href={waLink(reminder(s))} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium">
-                    <Icon name="message" size={15} /> WhatsApp ile hatırlat
-                  </a>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon="bell"
+                    onClick={async () => {
+                      try {
+                        const r = await sendToStudents([{ student_id: student.id, message: reminder(s) }], "Görüşme hatırlatması");
+                        toast.show(r.notified ? "Hatırlatma bildirimi gönderildi" : "Hatırlatma uygulama içi not olarak gönderildi");
+                      } catch (e) {
+                        toast.show(errorText(e), "danger");
+                      }
+                    }}
+                  >
+                    Bildirimle hatırlat
+                  </Button>
                   <Button size="sm" variant="secondary" icon="calendar" onClick={() => sessionIcs(s, student.full_name)}>
                     Takvime ekle
                   </Button>
@@ -598,14 +610,15 @@ export function CounselorSessions({ student }: { student: Profile }) {
 }
 
 /* ================================================================== */
-/* WhatsApp hatırlatma şablonları (danışman)                           */
+/* Öğrenciye bildirim şablonları (danışman)                             */
 /* ================================================================== */
 
-export function WhatsAppReminder({ student }: { student: Profile }) {
+export function AppReminder({ student }: { student: Profile }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [ctx, setCtx] = useState<{ lastLog: string | null; done: number; total: number; next: CounselingSession | null } | null>(null);
-  const [phone, setPhone] = useState<string>("");
+  const [push, setPush] = useState<{ push_ready: boolean; on: boolean } | null>(null);
+  const [sending, setSending] = useState(false);
   const [kind, setKind] = useState<"gunluk" | "program" | "destek" | "gorusme">("gunluk");
   const [text, setText] = useState("");
   const first = student.full_name.split(" ")[0];
@@ -620,8 +633,7 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
         const { data } = await sb().from("plan_tasks").select("*").eq("plan_id", plan.id);
         tasks = ((data ?? []) as PlanTask[]).filter(isRealTask);
       }
-      const { data: ct } = await sb().from("student_contacts").select("phone").eq("student_id", student.id).maybeSingle();
-      setPhone((ct as { phone?: string } | null)?.phone ?? "");
+      pushStatus([student.id]).then((st) => setPush(st ? { push_ready: st.push_ready, on: st.enabled.has(student.id) } : null));
       const { data: ss } = await sb().from("counseling_sessions").select("*").eq("student_id", student.id).eq("status", "planned").gte("starts_at", new Date().toISOString()).order("starts_at").limit(1);
       setCtx({ lastLog: logs[0]?.log_date ?? null, done: tasks.filter((t) => t.done).length, total: tasks.length, next: ((ss ?? []) as CounselingSession[])[0] ?? null });
     })();
@@ -651,32 +663,37 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
 
   return (
     <>
-      <Button size="sm" variant="secondary" icon="message" onClick={() => setOpen(true)}>
-        WhatsApp hatırlatma
+      <Button size="sm" variant="secondary" icon="bell" onClick={() => setOpen(true)}>
+        Bildirim gönder
       </Button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={`${first} için hatırlatma`}
+        title={`${first} için bildirim`}
         footer={
           <>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Vazgeç
+            </Button>
             <Button
-              variant="ghost"
-              icon="copy"
+              icon="bell"
+              loading={sending}
+              disabled={!text.trim()}
               onClick={async () => {
+                setSending(true);
                 try {
-                  await navigator.clipboard.writeText(text);
-                  toast.show("Kopyalandı");
-                } catch {
-                  toast.show("Kopyalanamadı", "danger");
+                  const r = await sendToStudents([{ student_id: student.id, message: text.trim() }]);
+                  toast.show(r.push_ready ? (r.notified ? "Bildirim gönderildi" : "Uygulama içi not gönderildi (öğrencinin bildirimleri kapalı)") : "Uygulama içi not gönderildi");
+                  setOpen(false);
+                } catch (e) {
+                  toast.show(errorText(e), "danger");
+                } finally {
+                  setSending(false);
                 }
               }}
             >
-              Kopyala
+              Gönder
             </Button>
-            <a href={waTo(phone, text)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-[15px] font-medium text-primary-fg">
-              <Icon name="message" size={17} /> WhatsApp'ta aç
-            </a>
           </>
         }
       >
@@ -697,7 +714,10 @@ export function WhatsAppReminder({ student }: { student: Profile }) {
               ]}
             />
             <textarea className="field min-h-36 text-sm" value={text} onChange={(e) => setText(e.target.value)} aria-label="Mesaj" />
-            <p className="text-xs text-faint">Mesaj öğrencinin kendi verisinden hazırlandı; göndermeden önce düzenleyebilirsin. {normalizePhone(phone) ? `WhatsApp ${phone} numarasında açılır.` : "Telefon kayıtlı değilse WhatsApp'ta kişiyi sen seçersin (Hesap sekmesinden ekleyebilirsin)."}</p>
+            <p className="text-xs text-faint">
+              Mesaj öğrencinin kendi verisinden hazırlandı; göndermeden önce düzenleyebilirsiniz. Öğrenci mesajı uygulamanın Bugün ekranında görür
+              {push == null ? "." : !push.push_ready ? "; anlık bildirim için Ayarlar → Bildirimler kurulumu gerekli." : push.on ? " ve telefonuna anlık bildirim gider." : "; öğrencinin bildirimleri kapalı olduğu için anlık bildirim gitmez."}
+            </p>
           </div>
         )}
       </Modal>

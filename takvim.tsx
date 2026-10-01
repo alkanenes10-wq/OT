@@ -1,10 +1,11 @@
 "use client";
 // Danışmanın randevu takvimi: tüm öğrencilerin görüşmeleri haftalık görünümde,
-// yaklaşan görüşmeler için tek tıkla WhatsApp hatırlatması ve telefon takvimine aktarma.
+// yaklaşan görüşmeler için tek tıkla uygulama bildirimi ve telefon takvimine aktarma.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { A, errorText, sb } from "./db";
-import { type CounselingSession, downloadIcs, MODE_LABEL, type SessionMode, waLink, whenText } from "./ekler";
+import { type CounselingSession, downloadIcs, MODE_LABEL, type SessionMode, whenText } from "./ekler";
+import { sendToStudents } from "./bildirim";
 import { addDays, DAY_SHORT, formatTR, type Profile, todayISO } from "./lib";
 import { PageHeader } from "./shell";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, Modal, PageLoader, useToast } from "./ui";
@@ -85,9 +86,14 @@ export function CounselorCalendar() {
     load();
   }
 
-  function remind(s: Row) {
-    window.open(waLink(reminderText(s, names.get(s.student_id) ?? "")), "_blank", "noopener");
-    patch(s, { reminded_at: new Date().toISOString() });
+  async function remind(s: Row) {
+    try {
+      const r = await sendToStudents([{ student_id: s.student_id, message: reminderText(s, names.get(s.student_id) ?? "") }], "Görüşme hatırlatması");
+      toast.show(r.notified ? "Hatırlatma bildirimi gönderildi" : "Hatırlatma uygulama içi not olarak gönderildi");
+      patch(s, { reminded_at: new Date().toISOString() });
+    } catch (e) {
+      toast.show(errorText(e), "danger");
+    }
   }
 
   function exportAll() {
@@ -153,7 +159,7 @@ export function CounselorCalendar() {
               {waiting.length > 0 && <Badge tone="primary">{waiting.length} hatırlatma bekliyor</Badge>}
             </span>
           }
-          subtitle="Öğrenci uygulamada 24 saat kala hatırlatma kartını görür. WhatsApp hatırlatması gönderdiğinde işaretlenir."
+          subtitle="Öğrenci uygulamada 24 saat kala hatırlatma kartını görür. Bildirimle hatırlattığınızda işaretlenir."
         >
           <ul className="divide-y divide-line">
             {upcoming.map((s) => (
@@ -172,8 +178,8 @@ export function CounselorCalendar() {
                     Hatırlatıldı
                   </Badge>
                 ) : null}
-                <Button size="sm" variant={s.reminded_at ? "ghost" : "primary"} icon="message" onClick={() => remind(s)}>
-                  {s.reminded_at ? "Tekrar" : "WhatsApp hatırlat"}
+                <Button size="sm" variant={s.reminded_at ? "ghost" : "primary"} icon="bell" onClick={() => remind(s)}>
+                  {s.reminded_at ? "Tekrar" : "Bildirimle hatırlat"}
                 </Button>
                 <IconButton icon="trash" label="Görüşmeyi sil" onClick={() => remove(s)} />
               </li>

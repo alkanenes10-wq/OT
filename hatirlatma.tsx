@@ -1,13 +1,14 @@
 "use client";
 // Toplu hatırlatma merkezi (danışman): bugün görevini / günlüğünü tamamlamayan öğrencileri listeler,
-// öğrencinin kendi verisiyle dolan şablonlardan mesaj hazırlar; WhatsApp'ta açar veya uygulama içi not gönderir.
-// WhatsApp toplu gönderim yapmaz (WhatsApp buna izin vermez); "Sıradakini aç" ile öğrenciler hızlıca tek tek açılır.
+// öğrencinin kendi verisiyle dolan şablonlardan mesaj hazırlar; uygulama üzerinden gönderir:
+// mesaj öğrencinin Bugün ekranına not olarak düşer, bildirimi açık olanlara anlık bildirim de gider.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS } from "./curriculum";
 import { errorText, sb } from "./db";
 import { addDays, diffDays, formatShort, isRealTask, pickCurrentPlan, todayISO, type PlanTask, type Profile, type WeeklyPlan } from "./lib";
 import { PageHeader } from "./shell";
+import { pushStatus, sendResultText, sendToStudents } from "./bildirim";
 import { Badge, Button, Card, EmptyState, ErrorBox, Icon, PageLoader, Segmented, cx, useToast } from "./ui";
 
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
@@ -113,7 +114,7 @@ export function ReminderCenter() {
   const today = todayISO();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [contactsOk, setContactsOk] = useState(true);
+  const [pushInfo, setPushInfo] = useState<{ push_ready: boolean; enabled: Set<string> } | null>(null);
   const [filter, setFilter] = useState<Filter>("gorev");
   const [tplId, setTplId] = useState("gorev");
   const [text, setText] = useState(TEMPLATES[0].text);
@@ -150,8 +151,8 @@ export function ReminderCenter() {
           ? fetchAll<MiniTask>(planIds, (c) => sb().from("plan_tasks").select("plan_id, day_index, subject, topic_id, content, target_questions, done").in("plan_id", c).order("id"))
           : Promise.resolve([] as MiniTask[]),
         fetchAll<{ student_id: string; log_date: string }>(ids, (c) => sb().from("daily_logs").select("student_id, log_date").in("student_id", c).gte("log_date", addDays(today, -60)).order("log_date", { ascending: false })),
-        fetchAll<Contact>(ids, (c) => sb().from("student_contacts").select("*").in("student_id", c).order("student_id")).catch(() => {
-          setContactsOk(false);
+        pushStatus(ids).then((p) => {
+          setPushInfo(p);
           return [] as Contact[];
         }),
       ]);
@@ -249,28 +250,29 @@ export function ReminderCenter() {
     else if (f === "uzun") chooseTemplate("uzun");
   }
 
-  async function sendNotes(targets: Row[]) {
-    if (!targets.length) return;
+  async function sendNotes(all: Row[]) {
+    // "Kalan görevler" şablonu görevi kalmayan öğrenciye anlamsız olur: onları atla
+    const needsTasks = /\{(kalan|gorevler)\}/.test(text);
+    const targets = needsTasks ? all.filter((r) => r.today.some((t) => !t.done)) : all;
+    const skipped = all.length - targets.length;
+    if (!targets.length) return toast.show("Seçilenlerin bugün kalan görevi yok; başka şablon seçin", "danger");
     setBusy(true);
-    const { error } = await sb()
-      .from("shared_notes")
-      .insert(targets.map((r) => ({ student_id: r.s.id, body: fill(text, r).slice(0, 4000) })));
-    setBusy(false);
-    if (error) return toast.show(/shared_notes|schema cache/i.test(error.message) ? "Uygulama içi not için guncelleme-6.sql çalıştırılmalı." : errorText(error), "danger");
-    targets.forEach((r) => markSent(r.s.id));
-    setSelected(new Set());
-    toast.show(`${targets.length} öğrenciye uygulama içi not gönderildi`);
-  }
-
-  async function savePhone(r: Row, value: string) {
-    const { error } = await sb().from("student_contacts").upsert({ student_id: r.s.id, phone: value.trim().slice(0, 30), updated_at: new Date().toISOString() });
-    if (error) return toast.show(errorText(error), "danger");
-    setRows((rs) => (rs ?? []).map((x) => (x.s.id === r.s.id ? { ...x, phone: value.trim() } : x)));
-    toast.show("Telefon kaydedildi");
+    try {
+      const r = await sendToStudents(
+        targets.map((t) => ({ student_id: t.s.id, message: fill(text, t).slice(0, 1000) })),
+        TEMPLATES.find((t) => t.id === tplId)?.label ?? "Hatırlatma",
+      );
+      targets.forEach((t) => markSent(t.s.id));
+      setSelected(new Set());
+      toast.show(sendResultText(r) + (skipped ? ` · ${skipped} kişinin kalan görevi olmadığı için atlandı` : ""));
+    } catch (e) {
+      toast.show(/shared_notes|schema cache/i.test(String((e as Error)?.message)) ? "Uygulama içi not için guncelleme-6.sql çalıştırılmalı." : errorText(e), "danger");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!rows) return <PageLoader />;
-  const nextUnsent = list.find((r) => !sent.includes(r.s.id));
   const selRows = list.filter((r) => selected.has(r.s.id));
   const hour = new Date().getHours();
 
@@ -337,17 +339,9 @@ export function ReminderCenter() {
           title={`${list.length} öğrenci`}
           subtitle={`${list.filter((r) => sent.includes(r.s.id)).length} kişiye bugün hatırlatma gönderildi`}
           action={
-            nextUnsent && (
-              <a
-                href={waTo(nextUnsent.phone, fill(text, nextUnsent))}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => markSent(nextUnsent.s.id)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-medium text-primary-fg"
-              >
-                <Icon name="message" size={16} /> Sıradaki: {nextUnsent.first}
-              </a>
-            )
+            pushInfo?.push_ready ? (
+              <span className="text-xs text-muted">{list.filter((r) => pushInfo.enabled.has(r.s.id)).length}/{list.length} kişinin bildirimi açık</span>
+            ) : null
           }
         >
           <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-line pb-2">
@@ -360,8 +354,8 @@ export function ReminderCenter() {
               />
               Tümünü seç
             </label>
-            <Button size="sm" variant="soft" icon="note" disabled={!selRows.length} loading={busy} onClick={() => sendNotes(selRows)} className="ml-auto">
-              Seçilenlere uygulama içi not ({selRows.length})
+            <Button size="sm" icon="bell" disabled={!selRows.length} loading={busy} onClick={() => sendNotes(selRows)} className="ml-auto">
+              Seçilenlere gönder ({selRows.length})
             </Button>
           </div>
           <ul className="divide-y divide-line">
@@ -392,6 +386,7 @@ export function ReminderCenter() {
                           {r.s.full_name}
                         </a>
                         {isSent && <Badge tone="success">Gönderildi</Badge>}
+                        {pushInfo?.push_ready && !pushInfo.enabled.has(r.s.id) && <Badge>Bildirimi kapalı</Badge>}
                       </p>
                       <p className="text-xs text-muted">
                         {r.today.length ? `Bugün ${r.todayDone}/${r.today.length} görev` : r.plan ? "Bugün görev yok" : "Bu hafta program yok"}
@@ -406,47 +401,26 @@ export function ReminderCenter() {
                       <button type="button" onClick={() => setPreview((p) => (p === r.s.id ? null : r.s.id))} className="h-9 rounded-lg px-2.5 text-sm text-muted hover:bg-surface-2" aria-expanded={preview === r.s.id}>
                         Mesaj
                       </button>
-                      <Button size="sm" variant="ghost" icon="note" onClick={() => sendNotes([r])} disabled={busy}>
-                        Not
+                      <Button size="sm" variant="secondary" icon="bell" onClick={() => sendNotes([r])} disabled={busy}>
+                        Gönder
                       </Button>
-                      <a
-                        href={waTo(r.phone, msg)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={() => markSent(r.s.id)}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-sm font-medium hover:bg-surface-2"
-                        title={r.phone ? `WhatsApp: ${r.phone}` : "Telefon kayıtlı değil — WhatsApp'ta kişiyi sen seçersin"}
-                      >
-                        <Icon name="message" size={15} /> WhatsApp
-                      </a>
                     </div>
                   </div>
                   {preview === r.s.id && (
                     <div className="mt-2 space-y-2 rounded-xl bg-surface-2 p-3 text-sm">
                       <p className="whitespace-pre-wrap">{msg}</p>
-                      {contactsOk && !normalizePhone(r.phone) && <PhoneInput onSave={(v) => savePhone(r, v)} />}
                     </div>
                   )}
                 </li>
               );
             })}
           </ul>
-          {!contactsOk && <p className="mt-2 text-xs text-faint">Öğrenci telefonlarını kaydedip WhatsApp&apos;ı doğrudan doğru kişide açmak için Supabase&apos;de guncelleme-8.sql çalıştırılmalı.</p>}
+          <p className="mt-2 text-xs text-faint">
+            Mesaj öğrencinin Bugün ekranına not olarak düşer; bildirimi açık olanların telefonuna anlık bildirim de gider.
+            {pushInfo && !pushInfo.push_ready ? " Anlık bildirim için Ayarlar → Bildirimler kurulumu gerekli." : ""}
+          </p>
         </Card>
       )}
-    </div>
-  );
-}
-
-function PhoneInput({ onSave }: { onSave: (v: string) => void }) {
-  const [v, setV] = useState("");
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted">Telefon kayıtlı değil:</span>
-      <input className="field h-9 w-44 text-sm" inputMode="tel" placeholder="05xx xxx xx xx" value={v} onChange={(e) => setV(e.target.value)} />
-      <Button size="sm" variant="soft" disabled={!normalizePhone(v)} onClick={() => onSave(v)}>
-        Kaydet
-      </Button>
     </div>
   );
 }
@@ -483,7 +457,7 @@ export function StudentContactCard({ studentId }: { studentId: string }) {
     toast.show("İletişim bilgileri kaydedildi");
   }
   return (
-    <Card title="İletişim" subtitle="Yalnızca danışman görür. Hatırlatmalarda WhatsApp doğrudan bu numarada açılır.">
+    <Card title="İletişim" subtitle="Yalnızca danışman görür. Veli telefonu, veli bağlantısını gönderirken kullanılır.">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
           <span className="mb-1 block font-medium">Öğrenci telefonu</span>

@@ -3,7 +3,7 @@
 // iPhone'da bildirim için uygulama önce "Ana Ekrana Ekle" ile kurulmalıdır (iOS 16.4+).
 
 import { useCallback, useEffect, useState } from "react";
-import { errorText, sb, useAuth } from "./db";
+import { accessToken, errorText, sb, useAuth } from "./db";
 import { Button, Card, cx, useToast } from "./ui";
 
 const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
@@ -216,4 +216,42 @@ function PushSetupHelper() {
       )}
     </div>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* Danışman → öğrenci: anında uygulama bildirimi + uygulama içi not      */
+/* ------------------------------------------------------------------ */
+export type SendResult = { ok: boolean; error?: string; push_ready: boolean; students: number; notified: number; sent: number };
+
+export async function sendToStudents(items: { student_id: string; message: string }[], title = "Danışmanından mesaj"): Promise<SendResult> {
+  const r = await fetch("/api/bildirim/gonder", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${await accessToken()}` },
+    body: JSON.stringify({ items, title }),
+  });
+  const j = (await r.json().catch(() => ({ ok: false, error: "Sunucu yanıt vermedi" }))) as SendResult;
+  if (!r.ok || !j.ok) throw new Error(j.error || "Gönderilemedi");
+  return j;
+}
+
+/** Hangi öğrencilerin bildirimi açık (en az bir cihazda) */
+export async function pushStatus(studentIds: string[]): Promise<{ push_ready: boolean; enabled: Set<string> } | null> {
+  if (!studentIds.length) return { push_ready: false, enabled: new Set() };
+  try {
+      const r = await fetch("/api/bildirim/gonder", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${await accessToken()}` },
+      body: JSON.stringify({ student_ids: studentIds, check_only: true }),
+    });
+    const j = (await r.json()) as { ok: boolean; push_ready: boolean; enabled: string[] };
+    return j.ok ? { push_ready: j.push_ready, enabled: new Set(j.enabled) } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function sendResultText(r: SendResult) {
+  if (!r.push_ready) return `${r.students} öğrenciye uygulama içi not gönderildi (anlık bildirim kurulumu henüz yapılmadı)`;
+  const off = r.students - r.notified;
+  return `${r.students} öğrenciye gönderildi · ${r.notified} kişiye anlık bildirim${off ? ` · ${off} kişi bildirimi kapalı, uygulamayı açınca görecek` : ""}`;
 }

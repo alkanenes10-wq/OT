@@ -8,7 +8,7 @@ import { CatalogManager } from "./katalog";
 import { CounselorForum } from "./forum";
 import { ReminderCenter, StudentContactCard } from "./hatirlatma";
 import { AppearanceCard } from "./theme";
-import { CounselorSessions, WhatsAppReminder } from "./ekler";
+import { CounselorSessions, AppReminder } from "./ekler";
 import { ParentReport } from "./veli-raporu";
 import { QuestionBank } from "./soru-bankasi";
 import { CounselorCalendar, TodaySessionsStrip } from "./takvim";
@@ -781,7 +781,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
             @{student.username}
             {student.target ? ` · Hedef: ${student.target}` : ""}
           </p>
-          <WhatsAppReminder student={student} />
+          <AppReminder student={student} />
         </div>
       </div>
 
