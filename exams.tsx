@@ -3,26 +3,27 @@
 // Girilen yanlış/boş sayıları "Otomatik program oluştur" tarafından kullanılır.
 
 import { useEffect, useMemo, useState } from "react";
-import { COURSES, type Section } from "./curriculum";
+import { COURSES, EK_COURSES, type Section } from "./curriculum";
 import { analyzeKarne, type KarneReport } from "./actions";
-import { accessToken, errorText, fetchAnalyses, sb, useRoute } from "./db";
+import { useStudentMeta, accessToken, errorText, fetchAnalyses, sb, useRoute } from "./db";
 import { GeneratorModal } from "./plan";
 import { ALL_TOPICS } from "./curriculum";
-import { EXAM_SECTIONS, fmtNum, formatLong, formatShort, formatTR, net, subjectForTopic, todayISO, type ExamAnalysis } from "./lib";
+import { EXAM_SECTIONS, examTypesFor, wrongDivisor, fmtNum, formatLong, formatShort, formatTR, net, subjectForTopic, todayISO, type ExamAnalysis } from "./lib";
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Icon, IconButton, PageLoader, Segmented, Spinner, confirmAction, cx, useToast } from "./ui";
 
 type Draft = Omit<ExamAnalysis, "id" | "created_at" | "student_id"> & { id?: string };
 
-const empty = (): Draft => ({ exam_date: todayISO(), title: "", exam_type: "TYT", nets: {}, results: [], file_path: null, notes: "" });
+const emptyDraft = (type: ExamAnalysis["exam_type"] = "TYT"): Draft => ({ exam_date: todayISO(), title: "", exam_type: type, nets: {}, results: [], file_path: null, notes: "" });
 
 function sectionsFor(type: ExamAnalysis["exam_type"]): Section[] {
+  if (type === "LGS" || type === "KPSS") return EK_COURSES.filter((c) => c.sinav === type).flatMap((c) => c.sections);
   const all = COURSES.flatMap((c) => c.sections);
   if (type === "BRANS") return all;
   return all.filter((s) => s.exam === type || s.id === "geometri");
 }
 
 const totalNet = (a: Pick<ExamAnalysis, "nets">) => {
-  const v = Object.values(a.nets ?? {}).map((x) => net(x.d, x.y));
+  const v = Object.values(a.nets ?? {}).map((x) => net(x.d, x.y, wrongDivisor((a as { exam_type?: string }).exam_type)));
   return v.some((x) => x != null) ? v.reduce<number>((s, x) => s + (x ?? 0), 0) : null;
 };
 
@@ -50,6 +51,10 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number, msg: string): Promise<T> 
 }
 
 export function ExamAnalyses({ studentId }: { studentId: string }) {
+  const meta = useStudentMeta(studentId);
+  const types = examTypesFor(meta.field);
+  const mainTypes = types.filter((t) => t !== "BRANS");
+  const empty = () => emptyDraft(types[0]);
   const toast = useToast();
   const { go } = useRoute();
   const [list, setList] = useState<ExamAnalysis[] | null>(null);
@@ -59,7 +64,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const [genFor, setGenFor] = useState<string | null>(null);
   const [report, setReport] = useState<KarneReport | null>(null);
-  const [kind, setKind] = useState<"ALL" | "TYT" | "AYT">("ALL");
+  const [kind, setKind] = useState<"ALL" | "TYT" | "AYT" | "LGS" | "KPSS">("ALL");
 
   async function uploadAndAnalyze(file: File) {
     setError(null);
@@ -241,8 +246,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
               onChange={setKind}
               options={[
                 { value: "ALL", label: "Tümü" },
-                { value: "TYT", label: `TYT (${list.filter((a) => a.exam_type === "TYT").length})` },
-                { value: "AYT", label: `AYT (${list.filter((a) => a.exam_type === "AYT").length})` },
+                ...mainTypes.map((t) => ({ value: t as typeof kind, label: `${t} (${list.filter((a) => a.exam_type === t).length})` })),
               ]}
             />
           </div>
@@ -284,7 +288,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
                   </span>
                   {Object.entries(a.nets ?? {}).map(([k, v]) => (
                     <span key={k} className="text-muted">
-                      {k}: <span className="tabular text-fg">{fmtNum(net(v.d, v.y), 2)}</span>
+                      {k}: <span className="tabular text-fg">{fmtNum(net(v.d, v.y, wrongDivisor(a.exam_type)), 2)}</span>
                     </span>
                   ))}
                 </div>
@@ -398,6 +402,8 @@ function MistakeHistory({ analyses }: { analyses: ExamAnalysis[] }) {
 function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: string; initial: Draft; onCancel: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [d, setD] = useState<Draft>(initial);
+  const meta = useStudentMeta(studentId);
+  const types = examTypesFor(meta.field);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -484,11 +490,7 @@ function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: 
               value={d.exam_type}
               onChange={(v) => setD({ ...d, exam_type: v, nets: {} })}
               ariaLabel="Deneme türü"
-              options={[
-                { value: "TYT", label: "TYT" },
-                { value: "AYT", label: "AYT" },
-                { value: "BRANS", label: "Branş" },
-              ]}
+              options={types.map((t) => ({ value: t, label: t === "BRANS" ? "Branş" : t }))}
             />
           </Field>
         </div>
@@ -544,7 +546,7 @@ function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: 
                       </td>
                     ))}
                     <td className="py-1.5 tabular text-muted">{b ?? "—"}</td>
-                    <td className="py-1.5 font-semibold tabular">{fmtNum(net(v.d, v.y), 2)}</td>
+                    <td className="py-1.5 font-semibold tabular">{fmtNum(net(v.d, v.y, wrongDivisor(d.exam_type)), 2)}</td>
                   </tr>
                 );
               })}

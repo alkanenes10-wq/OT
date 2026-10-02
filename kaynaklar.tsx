@@ -4,7 +4,7 @@
 // testler burada kendiliğinden "çözüldü" olur (guncelleme-8.sql içindeki tetikleyici).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ALL_TOPICS, COURSES } from "./curriculum";
+import { ALL_COURSES, ALL_TOPICS } from "./curriculum";
 import { errorText, sb } from "./db";
 import {
   RESOURCE_KINDS,
@@ -26,7 +26,7 @@ const kindLabel = (k: ResourceKind) => RESOURCE_KINDS.find((x) => x.value === k)
 
 export function topicsForSubject(subject: string) {
   const secs = SUBJECT_SECTIONS[subject] ?? [];
-  return COURSES.flatMap((c) => c.sections.filter((s) => secs.includes(s.id)).flatMap((s) => s.topics.map((t) => ({ id: t.id, name: `${s.exam} · ${t.name}` }))));
+  return ALL_COURSES.flatMap((c) => c.sections.filter((s) => secs.includes(s.id)).flatMap((s) => s.topics.map((t) => ({ id: t.id, name: `${s.exam} · ${t.name}` }))));
 }
 
 const missingTable = (e: unknown) => /resources|resource_progress|schema cache|does not exist/i.test(String((e as Error)?.message ?? e));

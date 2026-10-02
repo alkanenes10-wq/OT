@@ -80,6 +80,7 @@ const STUDENT_NAV: NavItem[] = [
 const COUNSELOR_NAV: { v?: string; label: string; short: string; icon: IconName }[] = [
   { label: "Öğrenciler", short: "Öğrenciler", icon: "users" },
   { v: "gorevler", label: "Görev panosu", short: "Görevler", icon: "list" },
+  { v: "raporlar", label: "Haftalık raporlar", short: "Raporlar", icon: "chart" },
   { v: "takvim", label: "Takvim", short: "Takvim", icon: "calendar" },
   { v: "hatirlatma", label: "Hatırlatma", short: "Hatırlatma", icon: "bell" },
   { v: "forum", label: "Soru forumu", short: "Forum", icon: "question" },

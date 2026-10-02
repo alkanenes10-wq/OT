@@ -1,6 +1,8 @@
 "use client";
 // Öğrenci ekranları: Bugün, Program, Günlük, Konular, İlerleme, Ayarlar.
 
+import { StudentAi } from "./yz-soru";
+import { StudentWeeklyCard } from "./haftalik";
 import { StudentVideos, VideoSuggestionsCard } from "./videolar";
 import { BadgesCard, StreakCard } from "./oyun";
 import { NotificationsCard } from "./bildirim";
@@ -112,9 +114,9 @@ function Today() {
         <div className="min-w-0">
           <h1 className="display text-[28px] leading-tight">Merhaba {firstName}</h1>
           <p className="text-sm text-muted">{formatLong(today)}</p>
-          {yksLabel(profile.exam_year) && <p className="text-xs text-faint">{yksLabel(profile.exam_year)}</p>}
+          {yksLabel(profile.exam_year, profile.field) && <p className="text-xs text-faint">{yksLabel(profile.exam_year, profile.field)}</p>}
         </div>
-        <YksCountdown examYear={profile.exam_year} />
+        <YksCountdown examYear={profile.exam_year} field={profile.field} />
       </div>
       <InstallHint />
       <StudentSupport variant="card" />
@@ -218,7 +220,6 @@ function Today() {
       </Card>
 
       <VideoSuggestionsCard />
-
       <details className="group">
         <summary className="card flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
           <span>
@@ -348,7 +349,7 @@ function Program() {
   return (
     <>
       <PageHeader title="Haftalık program" />
-      <WeeklyPlanView studentId={profile.id} field={profile.field} />
+      <WeeklyPlanView studentId={profile.id} field={profile.field} grade={profile.grade} />
       <details className="group mt-6 max-w-3xl">
         <summary className="cursor-pointer list-none text-sm font-medium text-primary">
           <span className="group-open:hidden">▸ Çalışma saatlerimi göster</span>
@@ -389,13 +390,13 @@ function Topics() {
 
 function Questions() {
   const { profile } = useAuth();
-  const [view, setView] = useState<"benim" | "ortak">("benim");
+  const [view, setView] = useState<"benim" | "yz" | "ortak">("benim");
   if (!profile) return null;
   return (
     <>
       <PageHeader
         title="Sorular"
-        subtitle={view === "benim" ? "Yapamadığın soruları sakla, cevabına bak, onlardan test çöz." : "Arkadaşlarının soruları — herkes anonim. Bildiğin bir soruya çözüm yolunu yaz."}
+        subtitle={view === "benim" ? "Yapamadığın soruları sakla, cevabına bak, onlardan test çöz." : view === "yz" ? "Takıldığın sorunun fotoğrafını yükle: önce ipucu, istersen çözüm." : "Arkadaşlarının soruları — herkes anonim. Bildiğin bir soruya çözüm yolunu yaz."}
       />
       <div className="mb-4">
         <Segmented
@@ -404,11 +405,12 @@ function Questions() {
           onChange={setView}
           options={[
             { value: "benim", label: "Sorularım" },
+            { value: "yz", label: "Yapay zekâya sor" },
             { value: "ortak", label: "Ortak sorular" },
           ]}
         />
       </div>
-      {view === "benim" ? <QuestionBank studentId={profile.id} audience="student" /> : <ForumBoard audience="student" />}
+      {view === "benim" ? <QuestionBank studentId={profile.id} audience="student" /> : view === "yz" ? <StudentAi studentId={profile.id} /> : <ForumBoard audience="student" />}
     </>
   );
 }
@@ -422,6 +424,7 @@ function Progress() {
       <div className="mb-4">
         <BadgesCard studentId={profile.id} />
       </div>
+      <StudentWeeklyCard />
       <StudentInsights studentId={profile.id} />
     </>
   );

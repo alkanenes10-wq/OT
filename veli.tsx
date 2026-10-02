@@ -4,12 +4,13 @@
 // Kaygı, motivasyon, notlar, destek kayıtları ve soru fotoğrafları veliye hiçbir zaman gösterilmez.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ALL_TOPICS, COURSES } from "./curriculum";
+import { ALL_TOPICS, coursesFor } from "./curriculum";
 import { errorText, sb } from "./db";
 import { YksCountdown } from "./ekler";
 import { waTo } from "./hatirlatma";
 import { BarChart } from "./insights";
 import { addDays, dayName, fmtNum, formatShort, isRealTask, minutesToText, parseISODate, pickCurrentPlan, todayISO, type PlanTask } from "./lib";
+import { WeeklyReportBody, weekLabel, type WeeklyData } from "./haftalik";
 import { ExamTrends } from "./progress";
 import { Badge, Button, Card, EmptyState, ErrorBox, IconButton, PageLoader, cx, confirmAction, useToast } from "./ui";
 
@@ -21,7 +22,7 @@ type ParentData = {
   plans: { id: string; start_date: string }[];
   tasks: (Pick<PlanTask, "plan_id" | "day_index" | "subject" | "topic_id" | "content" | "task_type" | "target_questions" | "solved" | "correct" | "wrong" | "done" | "start_time" | "duration_min">)[];
   days: { plan_id: string; day_index: number; study_minutes: number | null }[];
-  exams: { exam_date: string; exam_type: "TYT" | "AYT" | "BRANS"; title: string; nets: Record<string, { d?: number | null; y?: number | null }> }[];
+  exams: { exam_date: string; exam_type: "TYT" | "AYT" | "BRANS" | "LGS" | "KPSS"; title: string; nets: Record<string, { d?: number | null; y?: number | null }> }[];
   sleep_phone: { log_date: string; sleep_hours: number | null; phone_minutes: number | null }[];
   topics: { topic_id: string; status: string }[];
 };
@@ -67,7 +68,7 @@ export function ParentPage({ token }: { token: string }) {
             </span>
             YKS Takip
           </span>
-          <Badge>Veli görünümü · salt okunur</Badge>
+          <Badge>Veli paneli</Badge>
         </div>
       </header>
       <main className="mx-auto max-w-4xl space-y-4 px-4 pb-16 pt-5">
@@ -82,14 +83,14 @@ export function ParentPage({ token }: { token: string }) {
             </EmptyState>
           </Card>
         ) : (
-          <ParentContent d={data} />
+          <ParentContent d={data} token={token} />
         )}
       </main>
     </div>
   );
 }
 
-function ParentContent({ d }: { d: ParentData }) {
+function ParentContent({ d, token }: { d: ParentData; token: string }) {
   const today = todayISO();
   const plan = pickCurrentPlan(d.plans, today);
   const real = d.tasks.filter((t) => isRealTask(t));
@@ -122,7 +123,7 @@ function ParentContent({ d }: { d: ParentData }) {
   const sleep4 = avgOf(last4.map((l) => l.sleep_hours));
   const phone4 = avgOf(last4.map((l) => l.phone_minutes));
 
-  const courseProgress = COURSES.map((c) => {
+  const courseProgress = coursesFor(d.student.field, d.student.grade).map((c) => {
     const ids = new Set(c.sections.flatMap((s) => s.topics.map((t) => t.id)));
     const fin = d.topics.filter((t) => ids.has(t.topic_id) && (t.status === "done" || t.status === "reviewed")).length;
     return { name: c.name, fin, total: ids.size };
@@ -138,8 +139,10 @@ function ParentContent({ d }: { d: ParentData }) {
             {d.counselor ? ` · Danışman: ${d.counselor}` : ""}
           </p>
         </div>
-        <YksCountdown examYear={d.student.exam_year} />
+        <YksCountdown examYear={d.student.exam_year} field={d.student.field} />
       </div>
+
+      <ParentPanel token={token} counselor={d.counselor} />
 
       <Card
         title="Bu haftaki program"
@@ -357,6 +360,194 @@ export function ParentLinksCard({ studentId, studentName }: { studentId: string;
         </ul>
       )}
       {!phone && active.length > 0 && <p className="mt-2 text-xs text-faint">Veli telefonunu &quot;İletişim&quot; kartına eklerseniz WhatsApp doğrudan velide açılır.</p>}
+    </Card>
+  );
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Veli paneli: görüşmeler, haftalık raporlar, danışmanla mesajlaşma     */
+/* ------------------------------------------------------------------ */
+type PanelData = {
+  reports: { week_start: string; data: WeeklyData; note: string }[];
+  sessions: { starts_at: string; duration_min: number; mode: string }[];
+  messages: { id: string; from_parent: boolean; body: string; created_at: string }[];
+};
+const MODE_TR: Record<string, string> = { online: "Online", yuz_yuze: "Yüz yüze", telefon: "Telefon" };
+const dateTimeTR = (ts: string) => new Date(ts).toLocaleString("tr-TR", { day: "numeric", month: "long", weekday: "long", hour: "2-digit", minute: "2-digit" });
+
+function ParentPanel({ token, counselor }: { token: string; counselor: string | null }) {
+  const toast = useToast();
+  const [panel, setPanel] = useState<PanelData | null>(null);
+  const [off, setOff] = useState(false);
+  const [open, setOpen] = useState(0);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    sb()
+      .rpc("parent_panel", { p_token: token })
+      .then(({ data, error }) => {
+        if (error) return setOff(true); // güncelleme henüz yapılmadıysa panel bölümü gizlenir
+        setPanel((data as PanelData | null) ?? { reports: [], sessions: [], messages: [] });
+      });
+  }, [token]);
+  useEffect(load, [load]);
+
+  async function send() {
+    const b = text.trim();
+    if (!b) return;
+    setBusy(true);
+    const { error } = await sb().rpc("parent_send", { p_token: token, p_body: b });
+    setBusy(false);
+    if (error) return toast.show(errorText(error), "danger");
+    setText("");
+    toast.show("Mesajınız danışmana iletildi");
+    load();
+  }
+
+  if (off || !panel) return null;
+  const rep = panel.reports[Math.min(open, Math.max(0, panel.reports.length - 1))];
+
+  return (
+    <>
+      {panel.sessions.length > 0 && (
+        <Card title="Yaklaşan görüşmeler" subtitle="Öğrencinin danışmanıyla planlanan görüşmeleri">
+          <ul className="space-y-1.5 text-sm">
+            {panel.sessions.slice(0, 4).map((s) => (
+              <li key={s.starts_at} className="flex flex-wrap justify-between gap-2">
+                <span className="font-medium">{dateTimeTR(s.starts_at)}</span>
+                <span className="text-muted">
+                  {MODE_TR[s.mode] ?? s.mode} · {s.duration_min} dk
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card
+        title="Haftalık raporlar"
+        subtitle={rep ? weekLabel(rep.week_start) : "Her pazar akşamı yeni rapor yayınlanır"}
+        action={
+          panel.reports.length > 1 ? (
+            <div className="flex">
+              <IconButton icon="chevronLeft" label="Önceki hafta" className="h-9 w-9" disabled={open >= panel.reports.length - 1} onClick={() => setOpen(open + 1)} />
+              <IconButton icon="chevronRight" label="Sonraki hafta" className="h-9 w-9" disabled={open === 0} onClick={() => setOpen(open - 1)} />
+            </div>
+          ) : undefined
+        }
+      >
+        {rep ? (
+          <>
+            <WeeklyReportBody d={rep.data} audience="parent" />
+            {rep.note && (
+              <div className="mt-3 rounded-xl border border-primary/30 bg-primary-soft p-3 text-sm">
+                <p className="text-xs font-semibold text-primary-ink">Danışmanın notu</p>
+                <p className="mt-0.5 whitespace-pre-line">{rep.note}</p>
+              </div>
+            )}
+            {panel.reports.length > 1 && (
+              <p className="mt-3 text-xs text-muted">
+                {panel.reports.length} haftalık rapor arşivde. Oklarla önceki haftalara bakabilirsiniz.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted">Henüz yayınlanmış rapor yok. İlk rapor pazar akşamı burada görünecek.</p>
+        )}
+      </Card>
+
+      <Card title={`Danışmana mesaj${counselor ? ` · ${counselor}` : ""}`} subtitle="Sorularınızı ve gözlemlerinizi buradan iletebilirsiniz. Yanıt yine burada görünür.">
+        {panel.messages.length > 0 && (
+          <ul className="mb-3 max-h-80 space-y-2 overflow-y-auto">
+            {panel.messages.map((m) => (
+              <li key={m.id} className={cx("flex", m.from_parent ? "justify-end" : "justify-start")}>
+                <div className={cx("max-w-[85%] rounded-2xl px-3 py-2 text-sm", m.from_parent ? "bg-primary text-primary-fg" : "bg-surface-2")}>
+                  <p className="whitespace-pre-line">{m.body}</p>
+                  <p className={cx("mt-0.5 text-[10px]", m.from_parent ? "opacity-80" : "text-faint")}>
+                    {m.from_parent ? "Siz" : "Danışman"} · {new Date(m.created_at).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-end gap-2">
+          <textarea className="field min-h-11 flex-1 text-sm" rows={2} maxLength={1500} value={text} onChange={(e) => setText(e.target.value)} placeholder="Mesajınızı yazın…" />
+          <Button loading={busy} disabled={!text.trim()} onClick={send}>
+            Gönder
+          </Button>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Danışman: veliyle mesajlaşma (öğrencinin "Veli ve hesap" bölümünde)   */
+/* ------------------------------------------------------------------ */
+type PMsg = { id: string; student_id: string; from_parent: boolean; body: string; created_at: string; read_at: string | null };
+
+export function ParentMessagesCard({ studentId }: { studentId: string }) {
+  const toast = useToast();
+  const [list, setList] = useState<PMsg[] | null>(null);
+  const [off, setOff] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data, error } = await sb().from("parent_messages").select("*").eq("student_id", studentId).order("created_at").limit(200);
+    if (error) return setOff(true);
+    const rows = (data ?? []) as PMsg[];
+    setList(rows);
+    // Açıldığında veliden gelenler okunmuş sayılır
+    const unread = rows.filter((m) => m.from_parent && !m.read_at).map((m) => m.id);
+    if (unread.length) await sb().from("parent_messages").update({ read_at: new Date().toISOString() }).in("id", unread);
+  }, [studentId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function send() {
+    const b = text.trim();
+    if (!b) return;
+    setBusy(true);
+    const { error } = await sb().from("parent_messages").insert({ student_id: studentId, from_parent: false, body: b.slice(0, 1500) });
+    setBusy(false);
+    if (error) return toast.show(errorText(error), "danger");
+    setText("");
+    load();
+  }
+
+  if (off) return null;
+  return (
+    <Card title="Veliyle mesajlar" subtitle="Veli, kendi panelinden size yazabilir; yanıtınız orada görünür. Öğrenci bu mesajları görmez.">
+      {!list ? (
+        <PageLoader />
+      ) : list.length === 0 ? (
+        <p className="mb-3 text-sm text-muted">Henüz mesaj yok. Veliye bir duyuru ya da bilgi notu yazabilirsiniz.</p>
+      ) : (
+        <ul className="mb-3 max-h-96 space-y-2 overflow-y-auto">
+          {list.map((m) => (
+            <li key={m.id} className={cx("flex", m.from_parent ? "justify-start" : "justify-end")}>
+              <div className={cx("max-w-[85%] rounded-2xl px-3 py-2 text-sm", m.from_parent ? "bg-surface-2" : "bg-primary text-primary-fg")}>
+                <p className="whitespace-pre-line">{m.body}</p>
+                <p className={cx("mt-0.5 text-[10px]", m.from_parent ? "text-faint" : "opacity-80")}>
+                  {m.from_parent ? "Veli" : "Siz"} · {new Date(m.created_at).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  {!m.from_parent && (m.read_at ? " · görüldü" : " · henüz görülmedi")}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-end gap-2">
+        <textarea className="field min-h-11 flex-1 text-sm" rows={2} maxLength={1500} value={text} onChange={(e) => setText(e.target.value)} placeholder="Veliye yazın…" />
+        <Button loading={busy} disabled={!text.trim()} onClick={send}>
+          Gönder
+        </Button>
+      </div>
     </Card>
   );
 }

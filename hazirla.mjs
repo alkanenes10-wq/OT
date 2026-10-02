@@ -41,6 +41,9 @@ const APP_FILES = [
   "kazanimlar.ts",
   "konu-bilgi.tsx",
   "videolar.tsx",
+  "kazanimlar-ek.ts",
+  "haftalik.tsx",
+  "yz-soru.tsx",
   "bugun-kutusu.tsx",
   "durum.tsx",
   "gorev-panosu.tsx",
@@ -61,6 +64,7 @@ const APP_FILES = [
 const NESTED = {
   "sw-route.ts": "app/sw.js/route.ts",
   "bildirim-route.ts": "app/api/bildirim/[tur]/route.ts",
+  "soru-coz-route.ts": "app/api/soru-coz/route.ts",
 };
 
 mkdirSync("app", { recursive: true });

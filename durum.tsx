@@ -18,12 +18,15 @@ const CHECKS: Check[] = [
   { label: "Öğrenci notları ve bildirim mesajları", table: "shared_notes" },
   { label: "Kaynak (kitap) takibi", table: "resources", column: "catalog_id" },
   { label: "Kaynak kataloğu", table: "resource_catalog" },
-  { label: "Soru forumu", table: "forum_posts" },
+  { label: "Soru forumu", rpc: "forum_role" },
   { label: "Veli bağlantısı", table: "parent_links" },
   { label: "Uygulama bildirimleri", table: "push_subscriptions" },
   { label: "Aylık hedefler", table: "monthly_goals" },
   { label: "Seri ve rozetler", rpc: "students_gamification" },
   { label: "Rehber videoları", table: "guide_videos" },
+  { label: "Haftalık raporlar", table: "weekly_reports" },
+  { label: "Veli mesajları", table: "parent_messages" },
+  { label: "Yapay zekâ soru çözümü", table: "ai_questions" },
 ];
 
 const isMissing = (e: { code?: string; message?: string } | null) =>
@@ -39,7 +42,7 @@ async function runChecks(): Promise<{ label: string; ok: boolean }[]> {
 }
 
 /** Eksik parça sayısı (null = henüz bilinmiyor) */
-const OK_KEY = "yks-db-guncel";
+const OK_KEY = "yks-db-guncel-34";
 export function useDbStatus(skipIfOk = false) {
   const [results, setResults] = useState<{ label: string; ok: boolean }[] | null>(null);
   const [busy, setBusy] = useState(false);

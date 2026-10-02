@@ -2,6 +2,7 @@
 // v1.9 eklemeleri: YKS geri sayımı, 5 dakika başlama modu, akşam hatırlatması,
 // telefona günlük hatırlatıcı (.ics), bildirim şablonları ve görüşme takvimi.
 
+import { sinavOf } from "./curriculum";
 import { pushStatus, sendToStudents } from "./bildirim";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText, fetchLogs, fetchPlans, sb } from "./db";
@@ -79,8 +80,26 @@ function safeSet(key: string, v: string) {
 /* ================================================================== */
 
 /** Öğrencinin sınav yılı geçmişse veya yoksa bir sonraki YKS'yi kullanır. */
-function nextYks(examYear: number | null): { year: number; date: string; estimated: boolean } | null {
+/** LGS haziranın ilk pazar günü yapılır varsayımıyla tahmin edilir; MEB açıkladığında LGS_DATES'e yazın. */
+export const LGS_DATES: Record<number, { date: string; estimated: boolean }> = {};
+function lgsDate(year: number): { date: string; estimated: boolean } {
+  if (LGS_DATES[year]) return LGS_DATES[year];
+  const d = new Date(Date.UTC(year, 5, 1));
+  d.setUTCDate(1 + ((7 - d.getUTCDay()) % 7));
+  return { date: d.toISOString().slice(0, 10), estimated: true };
+}
+
+function nextYks(examYear: number | null, sinav: string = "YKS"): { year: number; date: string; estimated: boolean } | null {
   const today = todayISO();
+  if (sinav === "KPSS") return null; // KPSS tarihi her yıl farklı; geri sayım gösterilmez
+  if (sinav === "LGS") {
+    const y0 = Number(today.slice(0, 4));
+    for (const y of [examYear ?? y0, y0, y0 + 1]) {
+      const x = lgsDate(y);
+      if (x.date >= today) return { year: y, ...x };
+    }
+    return null;
+  }
   const own = examYear ? YKS_DATES[examYear] : undefined;
   if (own && own.date >= today) return { year: examYear as number, ...own };
   const next = Object.entries(YKS_DATES)
@@ -90,18 +109,19 @@ function nextYks(examYear: number | null): { year: number; date: string; estimat
   return next ?? null;
 }
 
-export function yksLabel(examYear: number | null): string | null {
-  const info = nextYks(examYear);
+export function yksLabel(examYear: number | null, field?: string | null): string | null {
+  const sinav = sinavOf(field);
+  const info = nextYks(examYear, sinav);
   if (!info) return null;
-  return `YKS ${info.year}: ${formatLong(info.date)}${info.estimated ? " (tahmini)" : ""}`;
+  return `${sinav} ${info.year}: ${formatLong(info.date)}${info.estimated ? " (tahmini)" : ""}`;
 }
 
-export function YksCountdown({ examYear }: { examYear: number | null }) {
-  const info = nextYks(examYear);
+export function YksCountdown({ examYear, field }: { examYear: number | null; field?: string | null }) {
+  const info = nextYks(examYear, sinavOf(field));
   if (!info) return null;
   const days = diffDays(todayISO(), info.date);
   return (
-    <div className="flex shrink-0 flex-col items-center rounded-2xl bg-primary px-3 py-2 text-primary-fg" title={yksLabel(examYear) ?? undefined}>
+    <div className="flex shrink-0 flex-col items-center rounded-2xl bg-primary px-3 py-2 text-primary-fg" title={yksLabel(examYear, field) ?? undefined}>
       <span className="display text-2xl leading-none tabular">{days}</span>
       <span className="mt-0.5 text-[11px] font-medium opacity-90">gün kaldı</span>
     </div>

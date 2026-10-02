@@ -11,8 +11,10 @@ export type Topic = {
   shared?: boolean; // Soru sayısı komşu konularla ortak mı (Excel'de birleştirilmiş hücre)
 };
 
-export type Section = { id: string; title: string; exam: "TYT" | "AYT"; topics: Topic[] };
-export type Course = { id: string; name: string; short: string; sections: Section[] };
+export type Sinav = "YKS" | "LGS" | "KPSS";
+/** `exam` planlayıcıdaki TYT/AYT dengesi içindir; LGS ve KPSS bölümlerinde `sinav` ayrıca belirtilir. */
+export type Section = { id: string; title: string; exam: "TYT" | "AYT"; sinav?: "LGS" | "KPSS"; topics: Topic[] };
+export type Course = { id: string; name: string; short: string; sinav?: "LGS" | "KPSS"; sections: Section[] };
 
 type Row = [name: string, sub: string, desc?: string, q?: string, shared?: boolean];
 
@@ -30,11 +32,12 @@ function slug(s: string): string {
     .slice(0, 60);
 }
 
-function section(id: string, title: string, exam: "TYT" | "AYT", rows: Row[]): Section {
+function section(id: string, title: string, exam: "TYT" | "AYT" | "LGS" | "KPSS", rows: Row[]): Section {
   return {
     id,
     title,
-    exam,
+    exam: exam === "AYT" ? "AYT" : "TYT",
+    sinav: exam === "LGS" || exam === "KPSS" ? exam : undefined,
     topics: rows.map(([name, sub, desc, q, shared]) => ({
       id: `${id}.${slug(name)}`,
       name,
@@ -46,6 +49,7 @@ function section(id: string, title: string, exam: "TYT" | "AYT", rows: Row[]): S
   };
 }
 
+/** YKS dersleri (TYT + AYT). LGS ve KPSS dersleri aşağıda EK_COURSES içindedir. */
 export const COURSES: Course[] = [
   {
     id: "turkce",
@@ -328,7 +332,166 @@ export const COURSES: Course[] = [
   },
 ];
 
-export const ALL_TOPICS: Topic[] = COURSES.flatMap((c) => c.sections.flatMap((s) => s.topics));
+/* ==================================================================
+   LGS (8. sınıf) ve KPSS (Genel Yetenek - Genel Kültür) konuları
+   ================================================================== */
+const one = (id: string, name: string, short: string, sinav: "LGS" | "KPSS", rows: Row[]): Course => ({
+  id,
+  name,
+  short,
+  sinav,
+  sections: [section(id, name, sinav, rows)],
+});
+
+export const EK_COURSES: Course[] = [
+  /* ---------------- LGS ---------------- */
+  one("lgs-turkce", "LGS Türkçe", "Türkçe", "LGS", [
+    ["Sözcükte Anlam", "Gerçek, Mecaz, Terim Anlam, Çok Anlamlılık, Eş ve Zıt Anlam, Sesteş Sözcükler", "Sözcüğün cümledeki anlamı", "2-3"],
+    ["Deyimler ve Atasözleri", "Deyimlerin Anlamı, Atasözlerinin Anlamı, Özdeyişler", "Kalıplaşmış söz gruplarının anlamı", "1-2"],
+    ["Cümlede Anlam", "Öznel ve Nesnel Yargı, Neden-Sonuç, Amaç-Sonuç, Koşul, Karşılaştırma, Örtülü Anlam, Cümle Tamamlama", "Cümle yorumlama ve cümleler arası ilişkiler", "3-4"],
+    ["Paragrafta Anlam", "Ana Düşünce, Yardımcı Düşünce, Konu, Başlık, Paragrafın Yapısı, Anlatım Biçimleri, Düşünceyi Geliştirme Yolları", "Okuduğunu anlama ve yorumlama", "6-8"],
+    ["Söz Sanatları", "Benzetme, Kişileştirme, Konuşturma, Abartma, Karşıtlık", "Metindeki söz sanatlarını bulma", "1"],
+    ["Metin Türleri", "Hikâye, Masal, Fabl, Roman, Deneme, Makale, Söyleşi, Biyografi, Günlük, Anı", "Metin türlerinin özellikleri", "1"],
+    ["Sözel Mantık ve Görsel Okuma", "Tablo ve Grafik Yorumlama, Görsel Yorumlama, Sıralama ve Eşleştirme Soruları", "Verilen bilgilerden çıkarım yapma", "2-3"],
+    ["Fiilimsiler", "İsim-Fiil, Sıfat-Fiil, Zarf-Fiil", "Fiilimsi türleri ve cümledeki görevi", "1"],
+    ["Cümlenin Ögeleri", "Yüklem, Özne, Nesne, Yer Tamlayıcısı, Zarf Tamlayıcısı, Vurgu", "Cümleyi ögelerine ayırma", "1"],
+    ["Fiilde Çatı", "Etken-Edilgen Fiiller, Geçişli-Geçişsiz Fiiller", "Fiillerin özne ve nesneye göre durumu", "1"],
+    ["Cümle Türleri", "Yüklemin Türüne, Yerine, Anlamına ve Yapısına Göre Cümleler", "Cümleleri sınıflandırma", "1"],
+    ["Yazım Kuralları", "Büyük Harflerin Yazımı, De/Da, Ki, Mi'nin Yazımı, Sayıların Yazımı, Birleşik Sözcükler", "Yazım yanlışlarını bulma", "1"],
+    ["Noktalama İşaretleri", "Nokta, Virgül, Noktalı Virgül, İki Nokta, Kesme İşareti, Tırnak İşareti", "Noktalama işaretlerinin kullanımı", "1"],
+    ["Anlatım Bozuklukları", "Anlam Bakımından Bozukluklar, Yapı Bakımından Bozukluklar", "Bozuk cümleyi bulma ve düzeltme", "1"],
+  ]),
+  one("lgs-matematik", "LGS Matematik", "Matematik", "LGS", [
+    ["Çarpanlar ve Katlar", "Asal Çarpanlar, EBOB, EKOK, Aralarında Asal Sayılar", "Çarpan, kat ve EBOB-EKOK problemleri", "2"],
+    ["Üslü İfadeler", "Tam Sayıların Kuvvetleri, Üslü İfadelerde İşlemler, Bilimsel Gösterim, Ondalık Gösterimlerin Çözümlenmesi", "Üslü sayılarla işlem", "2"],
+    ["Kareköklü İfadeler", "Tam Kare Sayılar, Karekök Tahmini, Kareköklü İfadelerde İşlemler, Gerçek Sayılar", "Kareköklü sayılarla işlem", "2-3"],
+    ["Veri Analizi", "Çizgi ve Sütun Grafiği, Daire Grafiği, Grafikler Arası Dönüşüm", "Grafik okuma ve yorumlama", "1-2"],
+    ["Basit Olayların Olma Olasılığı", "Olasılık Kavramı, Eş Olasılıklı Olaylar, Olasılık Hesaplama", "Basit olasılık hesapları", "1-2"],
+    ["Cebirsel İfadeler ve Özdeşlikler", "Cebirsel İfadelerde Çarpma, Özdeşlikler, Çarpanlara Ayırma", "Cebirsel ifadelerle işlem", "2"],
+    ["Doğrusal Denklemler", "Birinci Dereceden Bir Bilinmeyenli Denklemler, Koordinat Sistemi, Doğrusal İlişkiler, Eğim, Denklem Sistemleri", "Denklem çözme ve doğru grafikleri", "2-3"],
+    ["Eşitsizlikler", "Eşitsizlik Kavramı, Sayı Doğrusunda Gösterim, Birinci Dereceden Bir Bilinmeyenli Eşitsizlikler", "Eşitsizlik çözme", "1-2"],
+    ["Üçgenler", "Üçgende Kenarortay, Açıortay, Yükseklik, Kenar-Açı İlişkileri, Üçgen Eşitsizliği, Pisagor Bağıntısı", "Üçgenin elemanları ve Pisagor", "2"],
+    ["Eşlik ve Benzerlik", "Eş Üçgenler, Benzer Üçgenler, Benzerlik Oranı", "Eşlik ve benzerlik problemleri", "1-2"],
+    ["Dönüşüm Geometrisi", "Öteleme, Yansıma, Ardışık Dönüşümler", "Şekillerin ötelenmesi ve yansıması", "1"],
+    ["Geometrik Cisimler", "Dik Prizmalar, Dik Dairesel Silindir, Dik Piramit, Dik Koni (Yüzey Alanı ve Hacim)", "Cisimlerin alan ve hacmi", "1-2"],
+  ]),
+  one("lgs-fen", "LGS Fen Bilimleri", "Fen", "LGS", [
+    ["Mevsimler ve İklim", "Mevsimlerin Oluşumu, İklim ve Hava Hareketleri", "Dünya'nın hareketleri ve iklim", "2"],
+    ["DNA ve Genetik Kod", "DNA'nın Yapısı, Kalıtım, Mutasyon ve Modifikasyon, Adaptasyon, Biyoteknoloji", "Kalıtım ve genetik", "4"],
+    ["Basınç", "Katı Basıncı, Sıvı Basıncı, Gaz Basıncı", "Basıncı etkileyen etkenler", "2"],
+    ["Madde ve Endüstri", "Periyodik Sistem, Fiziksel ve Kimyasal Değişimler, Kimyasal Tepkimeler, Asitler ve Bazlar, Maddenin Isı ile Etkileşimi, Türkiye'de Kimya Endüstrisi", "Maddenin yapısı ve değişimi", "5"],
+    ["Basit Makineler", "Makaralar, Kaldıraçlar, Eğik Düzlem, Çıkrık, Dişli Çarklar", "Basit makinelerde kuvvet-yol ilişkisi", "2"],
+    ["Enerji Dönüşümleri ve Çevre Bilimi", "Besin Zinciri ve Enerji Akışı, Fotosentez, Solunum, Madde Döngüleri, Sürdürülebilir Kalkınma", "Canlılarda enerji ve çevre", "3"],
+    ["Elektrik Yükleri ve Elektrik Enerjisi", "Elektrik Yükleri ve Elektriklenme, Elektrik Yüklü Cisimler, Elektrik Enerjisinin Dönüşümü", "Elektriklenme ve enerji dönüşümü", "2"],
+  ]),
+  one("lgs-inkilap", "LGS T.C. İnkılap Tarihi ve Atatürkçülük", "İnkılap", "LGS", [
+    ["Bir Kahraman Doğuyor", "Mustafa Kemal'in Çocukluğu ve Eğitimi, Yaşadığı Şehirler, Askerlik Hayatı", "Atatürk'ün hayatı ve onu etkileyen ortam", "1-2"],
+    ["Milli Uyanış: Bağımsızlık Yolunda Atılan Adımlar", "I. Dünya Savaşı, Mondros Ateşkesi, Cemiyetler, Kongreler, Misak-ı Milli, TBMM'nin Açılışı, Sevr", "Milli Mücadele'nin hazırlık dönemi", "2-3"],
+    ["Milli Bir Destan: Ya İstiklal Ya Ölüm", "Doğu ve Güney Cepheleri, Batı Cephesi Muharebeleri, Mudanya Ateşkesi, Lozan Barış Antlaşması", "Kurtuluş Savaşı cepheleri ve sonuçları", "2-3"],
+    ["Atatürkçülük ve Çağdaşlaşan Türkiye", "Atatürk İlkeleri, Siyasi, Hukuki, Eğitim, Toplumsal ve Ekonomik Alandaki İnkılaplar", "İnkılaplar ve ilkeler", "2-3"],
+    ["Demokratikleşme Çabaları", "Çok Partili Hayata Geçiş Denemeleri, Cumhuriyet'e Yönelik Tehditler", "Demokrasi denemeleri", "1"],
+    ["Atatürk Dönemi Türk Dış Politikası", "Dış Politikanın Temel İlkeleri, Musul Sorunu, Montrö, Hatay'ın Katılması", "Dış politika gelişmeleri", "1"],
+    ["Atatürk'ün Ölümü ve Sonrası", "Atatürk'ün Ölümü, İkinci Dünya Savaşı ve Türkiye", "Atatürk sonrası gelişmeler", "0-1"],
+  ]),
+  one("lgs-din", "LGS Din Kültürü ve Ahlak Bilgisi", "Din", "LGS", [
+    ["Kader İnancı", "Kader ve Kaza, İnsanın İradesi, Evrendeki Yasalar, Tevekkül", "Kader inancı ve insanın sorumluluğu", "2"],
+    ["Zekât ve Sadaka", "Paylaşma ve Yardımlaşma, Zekât, Sadaka, Infak", "Yardımlaşma ibadetleri", "2"],
+    ["Din ve Hayat", "Din, Birey ve Toplum, Dinin Temel Gayesi", "Dinin korumayı amaçladığı temel değerler", "2"],
+    ["Hz. Muhammed'in Örnekliği", "Hz. Muhammed'in Doğruluğu, Merhameti, Adaleti, Cesareti, İstişareye Önem Vermesi", "Peygamberin örnek ahlakı", "2"],
+    ["Kur'an-ı Kerim ve Özellikleri", "İslam Dininin Temel Kaynakları, Kur'an'ın Ana Konuları, Kur'an'ın Temel Özellikleri", "Kur'an'ı tanıma", "2"],
+  ]),
+  one("lgs-ingilizce", "LGS İngilizce", "İngilizce", "LGS", [
+    ["Friendship", "Inviting, Accepting and Refusing, Making Simple Inquiries", "Davet etme, kabul ve reddetme", "1"],
+    ["Teen Life", "Expressing Likes and Dislikes, Preferences, Daily Routines", "Hoşlanma ve tercih bildirme", "1"],
+    ["In the Kitchen", "Describing Simple Processes, Sequencing Words, Giving Instructions", "Tarif ve süreç anlatma", "1"],
+    ["On the Phone", "Phone Conversations, Stating Decisions, Leaving Messages", "Telefon konuşmaları", "1"],
+    ["The Internet", "Accepting and Refusing, Making Excuses, Internet Habits", "İnternet alışkanlıkları", "1"],
+    ["Adventures", "Expressing Preferences, Comparisons, Giving Explanations", "Karşılaştırma ve tercih", "1"],
+    ["Tourism", "Describing Places, Expressing Experiences, Present Perfect", "Yer tanıtma ve deneyim anlatma", "1"],
+    ["Chores", "Expressing Obligation, Responsibilities, Likes and Dislikes", "Sorumluluk ve zorunluluk bildirme", "1"],
+    ["Science", "Describing the Actions Happening Currently, Past Events, Scientific Achievements", "Bilimsel gelişmeleri anlatma", "1"],
+    ["Natural Forces", "Making Predictions, Giving Reasons and Results, Natural Disasters", "Tahmin ve neden-sonuç bildirme", "1"],
+  ]),
+
+  /* ---------------- KPSS Genel Yetenek ---------------- */
+  one("kpss-turkce", "KPSS Türkçe", "Türkçe", "KPSS", [
+    ["Sözcükte Anlam", "Gerçek, Yan, Mecaz, Terim Anlam, Sözcükler Arası Anlam İlişkileri, Deyimler ve Atasözleri", "Sözcüğün cümledeki anlamı", "3-4"],
+    ["Cümlede Anlam", "Cümle Yorumlama, Öznel ve Nesnel Yargı, Neden-Sonuç, Koşul, Cümle Tamamlama", "Cümlenin anlamı ve yorumu", "5-6"],
+    ["Paragrafta Anlam", "Ana Düşünce, Yardımcı Düşünce, Paragrafın Yapısı, Anlatım Biçimleri, Düşünceyi Geliştirme Yolları", "Paragraf yorumlama", "9-11"],
+    ["Ses Bilgisi", "Ünlü ve Ünsüz Olayları, Ulama", "Ses olayları", "1"],
+    ["Yapı Bilgisi", "Kök, Gövde, Yapım ve Çekim Ekleri, Sözcüğün Yapısı (Basit, Türemiş, Birleşik)", "Sözcüğün yapısı", "1"],
+    ["Sözcük Türleri", "İsim, Sıfat, Zamir, Zarf, Edat, Bağlaç, Ünlem, Fiil ve Fiilimsiler", "Sözcük türlerini ayırt etme", "1-2"],
+    ["Cümlenin Ögeleri", "Yüklem, Özne, Nesne, Dolaylı Tümleç, Zarf Tümleci", "Cümleyi ögelerine ayırma", "1"],
+    ["Cümle Türleri", "Yüklemine, Yapısına, Anlamına ve Öge Dizilişine Göre Cümleler", "Cümle türlerini belirleme", "1"],
+    ["Yazım Kuralları", "Büyük Harfler, Bitişik ve Ayrı Yazım, De/Da, Ki, Mi'nin Yazımı, Sayıların Yazımı", "Yazım yanlışları", "1-2"],
+    ["Noktalama İşaretleri", "Nokta, Virgül, Noktalı Virgül, İki Nokta, Kesme ve Diğer İşaretler", "Noktalama işaretleri", "1-2"],
+    ["Anlatım Bozuklukları", "Anlam ve Yapı Bakımından Anlatım Bozuklukları", "Bozuk cümleyi bulma", "1"],
+    ["Sözel Mantık", "Sıralama, Eşleştirme, Tablo Oluşturma, Çıkarım Soruları", "Verilen bilgilerle akıl yürütme", "4-5"],
+  ]),
+  one("kpss-matematik", "KPSS Matematik ve Geometri", "Matematik", "KPSS", [
+    ["Temel Kavramlar", "Sayı Kümeleri, Tek-Çift, Pozitif-Negatif Sayılar, Ardışık Sayılar, Basamak Kavramı", "Sayıların temel özellikleri", "2-3"],
+    ["Bölme, Bölünebilme, EBOB-EKOK", "Bölme İşlemi, Bölünebilme Kuralları, Asal Çarpanlar, EBOB, EKOK", "Bölünebilme ve EBOB-EKOK problemleri", "2"],
+    ["Rasyonel ve Ondalık Sayılar", "Rasyonel Sayılarda İşlemler, Sıralama, Ondalık Sayılar", "Kesirlerle işlem", "1-2"],
+    ["Basit Eşitsizlikler ve Mutlak Değer", "Eşitsizlik Özellikleri, Mutlak Değerli Denklem ve Eşitsizlikler", "Eşitsizlik ve mutlak değer", "1-2"],
+    ["Üslü ve Köklü Sayılar", "Üslü Sayılarda İşlemler, Köklü Sayılarda İşlemler, Sıralama", "Üslü ve köklü ifadeler", "2"],
+    ["Çarpanlara Ayırma", "Ortak Çarpan, Özdeşlikler, Sadeleştirme", "Cebirsel ifadeleri sadeleştirme", "1"],
+    ["Denklem Çözme", "Birinci Dereceden Denklemler, Denklem Sistemleri", "Denklem kurma ve çözme", "1-2"],
+    ["Oran-Orantı", "Doğru ve Ters Orantı, Bileşik Orantı, Ortalama", "Orantı problemleri", "1-2"],
+    ["Problemler", "Sayı-Kesir, Yaş, İşçi-Havuz, Hareket, Yüzde, Kâr-Zarar, Faiz, Karışım Problemleri", "Sözel problemleri denklemle çözme", "8-10"],
+    ["Kümeler ve Fonksiyonlar", "Kümelerde İşlemler, Küme Problemleri, Fonksiyon Kavramı, İşlem", "Küme ve fonksiyon soruları", "1-2"],
+    ["Modüler Aritmetik", "Kalan Sınıfları, Gün ve Saat Problemleri", "Mod alma ve periyodik problemler", "0-1"],
+    ["Permütasyon, Kombinasyon, Olasılık", "Sayma Kuralları, Sıralama, Seçme, Basit Olasılık", "Sayma ve olasılık", "1-2"],
+    ["Tablo ve Grafik Yorumlama", "Sütun, Çizgi ve Daire Grafikleri, Tablo Okuma", "Veri yorumlama", "3-4"],
+    ["Sayısal Mantık", "Sayı ve Şekil Örüntüleri, Akıl Yürütme, Mantıksal Çıkarım", "Sayısal akıl yürütme", "4-5"],
+    ["Geometri: Açılar ve Üçgenler", "Doğruda ve Üçgende Açılar, Dik Üçgen, Üçgende Alan ve Benzerlik", "Açı ve üçgen soruları", "1-2"],
+    ["Geometri: Çokgenler ve Dörtgenler", "Dörtgenler, Paralelkenar, Dikdörtgen, Kare, Yamuk, Alan Hesapları", "Dörtgenlerde alan ve çevre", "1"],
+    ["Geometri: Çember ve Daire", "Çemberde Açı, Uzunluk, Dairenin Alanı", "Çember ve daire soruları", "0-1"],
+    ["Geometri: Analitik ve Katı Cisimler", "Koordinat Düzlemi, Doğru Denklemi, Prizma, Silindir, Koni, Küre", "Analitik geometri ve hacim", "1"],
+  ]),
+
+  /* ---------------- KPSS Genel Kültür ---------------- */
+  one("kpss-tarih", "KPSS Tarih", "Tarih", "KPSS", [
+    ["İslamiyet Öncesi Türk Tarihi", "Orta Asya Türk Devletleri, Devlet Yönetimi, Ordu, Din, Sosyal ve Ekonomik Hayat", "İlk Türk devletleri ve kültürü", "1-2"],
+    ["İlk Türk-İslam Devletleri", "Karahanlılar, Gazneliler, Büyük Selçuklu, Anadolu Selçuklu, Beylikler, Kültür ve Medeniyet", "Türk-İslam devletleri", "2-3"],
+    ["Osmanlı Devleti Kuruluş ve Yükselme", "Kuruluş Dönemi Padişahları, İstanbul'un Fethi, Yükselme Dönemi Gelişmeleri", "Osmanlı siyasi tarihi (1299-1579)", "2-3"],
+    ["Osmanlı Kültür ve Medeniyeti", "Devlet Yönetimi, Divan, Ordu, Toprak Sistemi, Hukuk, Eğitim, Ekonomi", "Osmanlı teşkilat yapısı", "3-4"],
+    ["Osmanlı Duraklama ve Gerileme", "17. ve 18. Yüzyıl Siyasi Olayları, Islahatlar, Antlaşmalar", "Duraklama ve gerileme dönemi", "1-2"],
+    ["19. Yüzyılda Osmanlı (Dağılma)", "Tanzimat ve Islahat Fermanları, Meşrutiyet, Fikir Akımları, Isyanlar ve Savaşlar", "Dağılma dönemi ıslahatları", "2"],
+    ["20. Yüzyıl Başlarında Osmanlı", "Trablusgarp, Balkan Savaşları, I. Dünya Savaşı, Mondros Ateşkesi", "Son dönem savaşları", "2"],
+    ["Kurtuluş Savaşı Hazırlık Dönemi", "İşgaller, Cemiyetler, Genelgeler, Kongreler, Misak-ı Milli, TBMM", "Milli Mücadele'ye hazırlık", "3-4"],
+    ["Kurtuluş Savaşı Muharebeler", "Doğu, Güney ve Batı Cepheleri, Mudanya, Lozan", "Cepheler ve antlaşmalar", "2-3"],
+    ["Atatürk İlke ve İnkılapları", "Siyasi, Hukuki, Eğitim, Toplumsal, Ekonomik İnkılaplar, Atatürk İlkeleri", "İnkılaplar ve ilkeler", "4-5"],
+    ["Atatürk Dönemi İç ve Dış Politika", "Çok Partili Hayat Denemeleri, Musul, Montrö, Hatay, Balkan Antantı, Sadabat Paktı", "1923-1938 iç ve dış politika", "2"],
+    ["Çağdaş Türk ve Dünya Tarihi", "İki Savaş Arası Dönem, II. Dünya Savaşı, Soğuk Savaş, Yumuşama ve Küreselleşme", "20. yüzyıl dünya tarihi", "2-3"],
+  ]),
+  one("kpss-cografya", "KPSS Coğrafya", "Coğrafya", "KPSS", [
+    ["Türkiye'nin Coğrafi Konumu", "Matematik Konum, Özel Konum, Konumun Sonuçları", "Türkiye'nin konum özellikleri", "1-2"],
+    ["Türkiye'nin Yer Şekilleri", "Dağlar, Ovalar, Platolar, Akarsular, Göller, Kıyı Tipleri, Dış Kuvvetler", "Türkiye'nin fiziki coğrafyası", "3-4"],
+    ["Türkiye'nin İklimi ve Bitki Örtüsü", "İklim Elemanları, İklim Tipleri, Bitki Örtüsü, Toprak Tipleri", "İklim ve doğal bitki örtüsü", "3"],
+    ["Türkiye'de Nüfus ve Yerleşme", "Nüfus Özellikleri, Nüfus Dağılışı, Göçler, Yerleşme Tipleri", "Beşeri coğrafya", "2-3"],
+    ["Tarım, Hayvancılık ve Ormancılık", "Tarım Ürünleri ve Dağılışı, Hayvancılık Türleri, Ormancılık, Balıkçılık", "Tarımsal faaliyetler", "2-3"],
+    ["Madenler ve Enerji Kaynakları", "Maden Yatakları, Enerji Kaynakları ve Santraller", "Yer altı kaynakları ve enerji", "2"],
+    ["Sanayi, Ticaret, Ulaşım ve Turizm", "Sanayi Kolları ve Dağılışı, İç ve Dış Ticaret, Ulaşım Türleri, Turizm Merkezleri", "Ekonomik faaliyetler", "2-3"],
+    ["Bölgeler Coğrafyası", "Coğrafi Bölgelerin Özellikleri, Bölgesel Kalkınma Projeleri", "Bölgelerin karşılaştırılması", "1-2"],
+  ]),
+  one("kpss-vatandaslik", "KPSS Vatandaşlık ve Güncel Bilgiler", "Vatandaşlık", "KPSS", [
+    ["Hukukun Temel Kavramları", "Hukukun Kaynakları, Hukuk Dalları, Hak Türleri, Ehliyet, Kişilik, Sosyal Düzen Kuralları", "Temel hukuk bilgisi", "2-3"],
+    ["Devlet Biçimleri ve Hükümet Sistemleri", "Devletin Unsurları, Üniter ve Federal Devlet, Parlamenter ve Başkanlık Sistemleri, Demokrasi Türleri", "Devlet ve hükümet sistemleri", "1"],
+    ["Anayasal Gelişmeler", "Osmanlı Anayasal Belgeleri, 1921, 1924, 1961 Anayasaları", "Türk anayasa tarihi", "1"],
+    ["1982 Anayasası Temel İlkeler", "Cumhuriyetin Nitelikleri, Değiştirilemeyecek Hükümler, Anayasa Değişiklikleri", "Anayasanın temel ilkeleri", "1-2"],
+    ["Temel Hak ve Ödevler", "Kişi Hakları, Sosyal ve Ekonomik Haklar, Siyasi Haklar, Hakların Sınırlandırılması", "Hak ve özgürlükler", "1"],
+    ["Yasama", "TBMM'nin Yapısı, Görev ve Yetkileri, Kanun Yapımı, Milletvekilliği", "Yasama organı", "1-2"],
+    ["Yürütme", "Cumhurbaşkanı, Cumhurbaşkanı Yardımcıları ve Bakanlar, Olağanüstü Hal, Cumhurbaşkanlığı Kararnamesi", "Yürütme organı", "1-2"],
+    ["Yargı", "Yargının Temel İlkeleri, Yüksek Mahkemeler, Hâkimler ve Savcılar Kurulu", "Yargı organı", "1"],
+    ["İdare Hukuku", "Merkezi Yönetim, Taşra Teşkilatı, Yerel Yönetimler, Kamu Görevlileri", "İdarenin yapısı", "1-2"],
+    ["Güncel Bilgiler", "Türkiye ve Dünya ile İlgili Güncel Gelişmeler, Uluslararası Kuruluşlar, Kültür-Sanat-Spor", "Güncel olaylar", "6"],
+  ]),
+];
+
+/** Tüm sınavların dersleri */
+export const ALL_COURSES: Course[] = [...COURSES, ...EK_COURSES];
+
+export const ALL_TOPICS: Topic[] = ALL_COURSES.flatMap((c) => c.sections.flatMap((s) => s.topics));
 
 export function courseTopicIds(course: Course): string[] {
   return course.sections.flatMap((s) => s.topics.map((t) => t.id));
@@ -348,3 +511,77 @@ export const STATUS_ORDER: TopicStatus[] = ["not_started", "in_progress", "done"
 export function isCompleted(s: TopicStatus | undefined): boolean {
   return s === "done" || s === "reviewed";
 }
+
+/* ==================================================================
+   Öğrenciye göre ders listesi: sınav (YKS / LGS / KPSS) ve ara sınıf süzgeci
+   ================================================================== */
+
+/** Profildeki "alan" bilgisi sınavı da belirler: LGS ve KPSS ayrı alan değeridir, diğerleri YKS. */
+export const sinavOf = (field: string | null | undefined): Sinav => (field === "LGS" ? "LGS" : field === "KPSS" ? "KPSS" : "YKS");
+
+/** "9. sınıf" → 9. 12. sınıf, mezun ya da boş → 12 (tüm konular). */
+export function gradeLevel(grade: string | null | undefined): number {
+  const m = /^(\d{1,2})\./.exec(grade ?? "");
+  const n = m ? Number(m[1]) : 12;
+  return n >= 9 && n <= 11 ? n : 12;
+}
+
+// Konunun (yaklaşık olarak) işlendiği sınıf. Bölüm varsayılanı + konu bazında istisnalar.
+// Ara sınıf öğrencisine yalnızca kendi sınıfına kadar olan konular gösterilir. Gerekirse buradan düzeltin.
+const SECTION_GRADE: Record<string, number> = {
+  "tyt-turkce": 9, "ayt-edebiyat": 11, "tyt-matematik": 9, "ayt-matematik": 11, geometri: 10,
+  "tyt-fizik": 9, "ayt-fizik": 11, "tyt-kimya": 9, "ayt-kimya": 11, "tyt-biyoloji": 9, "ayt-biyoloji": 11,
+  "tyt-tarih": 9, "ayt-tarih": 11, "tyt-cografya": 9, "ayt-cografya": 11, "tyt-felsefe": 10, "tyt-din": 10,
+};
+const TOPIC_GRADE: Record<string, number> = {
+  "tyt-turkce.fiilimsiler-fiilde-cati": 10, "tyt-turkce.cumlenin-ogeleri": 10, "tyt-turkce.anlatim-bozukluklari": 10,
+  "ayt-edebiyat.siir-bilgisi": 9, "ayt-edebiyat.islamiyet-oncesi-ve-gecis-donemi-turk-edebiyati": 10, "ayt-edebiyat.halk-edebiyati": 10, "ayt-edebiyat.divan-edebiyati": 10,
+  "ayt-edebiyat.cumhuriyet-donemi-turk-edebiyati-siir": 12, "ayt-edebiyat.cumhuriyet-donemi-turk-edebiyati-roman-ve-hikaye": 12, "ayt-edebiyat.cumhuriyet-donemi-tiyatro-ve-ogretici-metinler": 12,
+  "tyt-matematik.carpanlara-ayirma": 10, "tyt-matematik.fonksiyonlar": 10, "tyt-matematik.permutasyon-kombinasyon": 10, "tyt-matematik.olasilik": 10,
+  "ayt-matematik.polinomlar": 10, "ayt-matematik.2-dereceden-denklemler": 10, "ayt-matematik.logaritma": 12, "ayt-matematik.diziler": 12,
+  "ayt-matematik.limit-ve-sureklilik": 12, "ayt-matematik.turev": 12, "ayt-matematik.integral": 12,
+  "geometri.acilar-ve-ucgenler": 9, "geometri.cember-ve-daire": 11, "geometri.analitik-geometri": 11, "geometri.cemberin-analitigi": 12,
+  "tyt-fizik.elektrik-ve-manyetizma-tyt": 10, "tyt-fizik.basinc-ve-kaldirma-kuvveti": 10, "tyt-fizik.dalgalar-tyt": 10, "tyt-fizik.optik": 10,
+  "ayt-fizik.duzgun-cembersel-hareket": 12, "ayt-fizik.kepler-kanunlari-harmonik-hareket": 12, "ayt-fizik.dalga-mekanigi-ve-isik-teorileri": 12,
+  "ayt-fizik.modern-fizik": 12, "ayt-fizik.modern-fizigin-teknolojideki-uygulamalari": 12,
+  "tyt-kimya.kimyanin-temel-kanunlari-ve-kimyasal-hesaplamalar": 10, "tyt-kimya.karisimlar-tyt": 10, "tyt-kimya.asitler-bazlar-ve-tuzlar": 10, "tyt-kimya.kimya-her-yerde": 10,
+  "ayt-kimya.kimya-ve-elektrik-elektrokimya": 12, "ayt-kimya.karbon-kimyasina-giris": 12, "ayt-kimya.organik-bilesikler": 12, "ayt-kimya.enerji-kaynaklari-ve-bilimsel-gelismeler": 12,
+  "tyt-biyoloji.hucre-bolunmeleri-ve-ureme": 10, "tyt-biyoloji.kalitimin-temel-ilkeleri-genetik": 10, "tyt-biyoloji.ekosistem-ekolojisi-ve-guncel-cevre-sorunlari": 10,
+  "ayt-biyoloji.genden-proteine-molekuler-genetik": 12, "ayt-biyoloji.biyoteknoloji-ve-gen-muhendisligi": 12, "ayt-biyoloji.canlilarda-enerji-donusumleri": 12, "ayt-biyoloji.bitki-biyolojisi": 12,
+  "tyt-tarih.turkiye-selcuklu-devleti": 10, "tyt-tarih.osmanli-devleti-kurulus-ve-yukselme": 10, "tyt-tarih.osmanli-devleti-duraklama-ve-gerileme": 11, "tyt-tarih.osmanli-devleti-dagilma": 11,
+  "tyt-tarih.milli-mucadele-hazirlik": 12, "tyt-tarih.milli-mucadele-ve-kurtulus-savasi": 12, "tyt-tarih.ataturk-ilkeleri-ve-inkilaplari": 12,
+  "ayt-tarih.tarih-bilimine-giris": 9, "ayt-tarih.insanligin-ilk-donemleri-ve-uygarliklar": 9, "ayt-tarih.islamiyet-oncesi-turk-tarihi": 9, "ayt-tarih.islam-tarihi-ve-uygarligi": 9,
+  "ayt-tarih.ilk-turk-islam-devletleri": 9, "ayt-tarih.turkiye-selcuklu-devleti-ve-beylikler": 10, "ayt-tarih.osmanli-kultur-ve-medeniyeti": 10,
+  "ayt-tarih.xx-yuzyil-baslarinda-osmanli-ve-i-dunya-savasi": 12, "ayt-tarih.milli-mucadele-hazirlik-donemi": 12, "ayt-tarih.milli-mucadele-muharebeler-ve-antlasmalar": 12,
+  "ayt-tarih.ataturk-ilkeleri-ve-inkilaplari": 12, "ayt-tarih.ataturk-donemi-turk-dis-politikasi": 12,
+  "tyt-cografya.yer-in-yapisi-ve-ic-kuvvetler": 10, "tyt-cografya.dis-kuvvetler": 10, "tyt-cografya.dogadaki-uc-unsur": 10, "tyt-cografya.nufus-ve-yerlesme": 10,
+  "tyt-cografya.gocler": 10, "tyt-cografya.ekonomik-faaliyetler": 11, "tyt-cografya.bolgeler-ve-ulkeler": 11, "tyt-cografya.dogal-afetler": 10,
+  "ayt-cografya.ekstrem-doga-olaylari-ve-iklim-degisimi": 12, "ayt-cografya.mekansal-bir-sentez-turkiye": 12,
+  "tyt-felsefe.mo-6-yuzyil-ms-2-yuzyil-felsefesi": 11, "tyt-felsefe.ms-2-yuzyil-ms-15-yuzyil-felsefesi": 11, "tyt-felsefe.15-yuzyil-17-yuzyil-felsefesi": 11,
+  "tyt-felsefe.18-yuzyil-19-yuzyil-felsefesi": 11, "tyt-felsefe.20-yuzyil-felsefesi": 11,
+  "tyt-din.bilgi-ve-inanc": 9, "tyt-din.islam-ve-ibadet": 9, "tyt-din.kur-an-da-bazi-kavramlar-ve-islam-dusuncesi": 11, "tyt-din.din-kultur-ve-sanat-dunya-dinleri": 12,
+};
+export const topicGrade = (topicId: string): number => TOPIC_GRADE[topicId] ?? SECTION_GRADE[topicId.split(".")[0]] ?? 12;
+
+const cache = new Map<string, Course[]>();
+/** Öğrencinin sınavına ve sınıfına göre görmesi gereken dersler */
+export function coursesFor(field: string | null | undefined, grade?: string | null): Course[] {
+  const sinav = sinavOf(field);
+  const level = sinav === "YKS" ? gradeLevel(grade) : 12;
+  const key = `${sinav}-${level}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  let out: Course[];
+  if (sinav !== "YKS") out = EK_COURSES.filter((c) => c.sinav === sinav);
+  else if (level >= 12) out = COURSES;
+  else
+    out = COURSES.map((c) => ({
+      ...c,
+      sections: c.sections.map((s) => ({ ...s, topics: s.topics.filter((t) => topicGrade(t.id) <= level) })).filter((s) => s.topics.length > 0),
+    })).filter((c) => c.sections.length > 0);
+  cache.set(key, out);
+  return out;
+}
+export const sectionsOfCourses = (courses: Course[]) => courses.flatMap((c) => c.sections);
+/** Bölüm rozetinde gösterilecek etiket: LGS / KPSS / TYT / AYT */
+export const sectionTag = (s: Section) => s.sinav ?? s.exam;

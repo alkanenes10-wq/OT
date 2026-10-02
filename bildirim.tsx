@@ -19,7 +19,7 @@ const bytesToB64u = (b: ArrayBuffer | Uint8Array) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
-type Prefs = { gunluk: boolean; gorev: boolean; ozet: boolean };
+type Prefs = { gunluk: boolean; gorev: boolean; ozet: boolean; haftalik: boolean };
 type State = "unsupported" | "ios-install" | "denied" | "off" | "on" | "loading";
 
 function isIos() {
@@ -38,7 +38,7 @@ export function NotificationsCard() {
   const { profile } = useAuth();
   const isCounselor = profile?.role === "counselor";
   const [state, setState] = useState<State>("loading");
-  const [prefs, setPrefs] = useState<Prefs>({ gunluk: true, gorev: true, ozet: true });
+  const [prefs, setPrefs] = useState<Prefs>({ gunluk: true, gorev: true, ozet: true, haftalik: true });
   const [busy, setBusy] = useState(false);
 
   const check = useCallback(async () => {
@@ -55,9 +55,9 @@ export function NotificationsCard() {
     check();
     sb()
       .from("notify_prefs")
-      .select("gunluk, gorev, ozet")
+      .select("*")
       .maybeSingle()
-      .then(({ data }) => data && setPrefs(data as Prefs));
+      .then(({ data }) => data && setPrefs((p) => ({ ...p, gunluk: data.gunluk, gorev: data.gorev, ozet: data.ozet, haftalik: data.haftalik ?? true })));
   }, [check]);
 
   async function enable() {
@@ -112,10 +112,12 @@ export function NotificationsCard() {
   }
 
   const options: { k: keyof Prefs; label: string; hint: string }[] = isCounselor
-    ? [{ k: "ozet", label: "Akşam özeti", hint: "Her akşam ~21:30: günlüğünü doldurmayanlar, açık destek uyarıları, forumda onay bekleyenler" }]
+    ? [{ k: "ozet", label: "Akşam özeti", hint: "Her akşam ~21:30: günlüğünü doldurmayanlar, açık destek uyarıları, forumda onay bekleyenler, veli mesajları" },
+       { k: "haftalik", label: "Haftalık rapor", hint: "Pazar akşamı ~20:00: öğrencilerinizin haftalık raporları hazır olduğunda" }]
     : [
         { k: "gorev", label: "Kalan görev hatırlatması", hint: "Akşamüstü ~18:00, bugünkü görevlerin bitmediyse" },
         { k: "gunluk", label: "Günlük takip hatırlatması", hint: "Akşam ~21:00, bugünkü günlüğünü doldurmadıysan" },
+        { k: "haftalik", label: "Haftalık özet", hint: "Pazar akşamı ~20:00, haftalık özetin hazır olduğunda" },
       ];
 
   return (

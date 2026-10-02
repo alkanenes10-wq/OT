@@ -3,11 +3,11 @@
 // Danışmana özeldir (kaygı/motivasyon gibi günlük verileri de içerir). Yazdırılabilir / PDF olarak kaydedilebilir.
 
 import { useEffect, useMemo, useState } from "react";
-import { ALL_TOPICS, isCompleted } from "./curriculum";
+import { ALL_TOPICS, isCompleted, sinavOf } from "./curriculum";
 import { A, errorText, fetchAnalyses, fetchLogs, fetchPlans, fetchTopicProgress, sb, useAuth } from "./db";
 import type { CounselingSession } from "./ekler";
 import { BarChart } from "./insights";
-import { addDays, avg, type DailyLog, type ExamAnalysis, fmtNum, formatTR, isRealTask, minutesToText, net, pct, type PlanDay, type PlanTask, type Profile, todayISO, type TopicProgress } from "./lib";
+import { addDays, avg, type DailyLog, type ExamAnalysis, fmtNum, formatTR, isRealTask, minutesToText, net, wrongDivisor, pct, type PlanDay, type PlanTask, type Profile, todayISO, type TopicProgress } from "./lib";
 import { earnedBadges, monthGoals, type GameStats } from "./oyun";
 import { Button, Card, ErrorBox, Icon, PageLoader, Segmented, useToast } from "./ui";
 
@@ -27,7 +27,7 @@ type PeriodKey = "son" | 7 | 14 | 30;
 
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
 const examNet = (a: ExamAnalysis) => {
-  const vals = Object.values(a.nets ?? {}).map((v) => net(v?.d, v?.y));
+  const vals = Object.values(a.nets ?? {}).map((v) => net(v?.d, v?.y, wrongDivisor(a.exam_type)));
   if (vals.every((v) => v == null)) return null;
   return Math.round(vals.reduce<number>((s, v) => s + (v ?? 0), 0) * 100) / 100;
 };
@@ -261,7 +261,7 @@ export function SessionReport({ studentId, sessionId }: { studentId: string; ses
           <div>
             <p className="text-xs font-semibold tracking-wide text-primary uppercase">Öğrenci performans raporu</p>
             <h2 className="display mt-1 text-2xl">{s.full_name}</h2>
-            <p className="text-sm text-muted">{[s.grade, s.field, s.exam_year ? `YKS ${s.exam_year}` : null, s.target ? `Hedef: ${s.target}` : null].filter(Boolean).join(" · ")}</p>
+            <p className="text-sm text-muted">{[s.grade, s.field, s.exam_year ? `${sinavOf(s.field)} ${s.exam_year}` : null, s.target ? `Hedef: ${s.target}` : null].filter(Boolean).join(" · ")}</p>
           </div>
           <div className="text-right text-sm">
             <p className="font-medium">

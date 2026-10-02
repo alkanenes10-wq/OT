@@ -3,8 +3,8 @@ import { GrowthDashboard } from "./progress";
 // Grafikler, dikkat göstergeleri ve ilerleme özeti.
 
 import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { COURSES, courseTopicIds, isCompleted } from "./curriculum";
-import { errorText, fetchLogs, fetchPlans, fetchTopicProgress, sb } from "./db";
+import { courseTopicIds, isCompleted } from "./curriculum";
+import { errorText, fetchLogs, fetchPlans, fetchTopicProgress, sb, useStudentCourses } from "./db";
 import { addDays, avg, computeSignals, type DailyLog, fmtNum, formatShort, pct, pickCurrentPlan, type PlanTask, rangeDates, type Signal, todayISO, type TopicProgress, type WeeklyPlan } from "./lib";
 import { DetailedSignalList, VariablesCard } from "./rehber";
 import { Card, cx, EmptyState, ErrorBox, Icon, PageLoader, ProgressBar, Segmented } from "./ui";
@@ -433,6 +433,7 @@ export function SignalChips({ signals, max = 3 }: { signals: Signal[]; max?: num
 type WeekRow = { plan: WeeklyPlan; total: number; done: number; minutes: number; questions: number };
 
 export function StudentInsights({ studentId, showSignals = false }: { studentId: string; showSignals?: boolean }) {
+  const COURSES = useStudentCourses(studentId);
   // Telefonda 14 gün daha okunaklı; geniş ekranda 30 gün
   const [range, setRange] = useState<14 | 30 | 60>(() => (typeof window !== "undefined" && window.innerWidth < 640 ? 14 : 30));
   const [logs, setLogs] = useState<DailyLog[] | null>(null);

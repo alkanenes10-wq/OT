@@ -1,6 +1,9 @@
 "use client";
 // Danışman ekranları: öğrenci listesi, yeni öğrenci, öğrenci detayı, notlar, hesap yönetimi, ayarlar.
 
+import { CounselorAi } from "./yz-soru";
+import { CounselorWeeklyReports } from "./haftalik";
+import { ParentMessagesCard } from "./veli";
 import { TaskBoard } from "./gorev-panosu";
 import { SessionReport } from "./gorusme-raporu";
 import { CounselorVideos } from "./videolar";
@@ -18,12 +21,12 @@ import { CounselorCalendar } from "./takvim";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TodoBox } from "./bugun-kutusu";
 import { DbStatusBanner, DbStatusCard } from "./durum";
-import { ALL_TOPICS, isCompleted } from "./curriculum";
+import { coursesFor, isCompleted, sectionsOfCourses, sinavOf } from "./curriculum";
 import { DailyLogSection } from "./daily";
 import { createStudent, deleteStudent, updateStudent } from "./actions";
 import { A, accessToken, errorText, sb, useAuth, useRoute } from "./db";
 import { SignalChips, StudentInsights } from "./insights";
-import { isRealTask, addDays, avg, computeSignals, type CounselorNote, type DailyLog, FIELDS, fmtNum, formatLong, GRADES, normalizeUsername, pct, pickCurrentPlan, type PlanTask, type Profile, relativeDay, type Signal, todayISO, type TopicProgress, USERNAME_RE, type WeeklyPlan } from "./lib";
+import { isRealTask, addDays, avg, computeSignals, type CounselorNote, type DailyLog, FIELDS, FIELD_LABELS, fmtNum, formatLong, GRADES, normalizeUsername, pct, pickCurrentPlan, type PlanTask, type Profile, relativeDay, type Signal, todayISO, type TopicProgress, USERNAME_RE, type WeeklyPlan } from "./lib";
 import { WeeklyPlanView } from "./plan";
 import { ExamAnalyses } from "./exams";
 import { ScheduleSection } from "./schedule";
@@ -140,11 +143,13 @@ export function StudentFieldsForm({ value, onChange }: { value: StudentFields; o
         <input id="sf-name" className="field" value={value.fullName} maxLength={120} onChange={set("fullName")} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Alan" htmlFor="sf-field">
+        <Field label="Sınav / alan" htmlFor="sf-field" hint="Konu listesi, program ve denemeler buna göre gelir">
           <select id="sf-field" className="field" value={value.field} onChange={set("field")}>
             <option value="">—</option>
             {FIELDS.map((f) => (
-              <option key={f}>{f}</option>
+              <option key={f} value={f}>
+                {FIELD_LABELS[f] ?? f}
+              </option>
             ))}
           </select>
         </Field>
@@ -418,14 +423,15 @@ function StudentList() {
           tasks = (t.data ?? []) as PlanTask[];
         }
 
-        const total = ALL_TOPICS.length;
         const out: Row[] = students.map((s) => {
           const sl = logs.filter((l) => l.student_id === s.id).sort((a, b) => (a.log_date < b.log_date ? 1 : -1));
           const plan = current.get(s.id) ?? null;
           const pt = plan ? tasks.filter((t) => t.plan_id === plan.id) : [];
           const withContent = pt.filter(isRealTask);
           const last7 = sl.filter((l) => l.log_date >= addDays(todayISO(), -6));
-          const done = topics.filter((t) => t.student_id === s.id && isCompleted(t.status)).length;
+          const own = new Set(sectionsOfCourses(coursesFor(s.field, s.grade)).flatMap((x) => x.topics.map((t) => t.id)));
+          const total = own.size;
+          const done = topics.filter((t) => t.student_id === s.id && own.has(t.topic_id) && isCompleted(t.status)).length;
           return {
             student: s,
             lastLog: sl[0]?.log_date ?? null,
@@ -737,6 +743,25 @@ function NewStudent() {
   );
 }
 
+function SorularTab({ studentId }: { studentId: string }) {
+  const [view, setView] = useState<"banka" | "yz">("banka");
+  return (
+    <div className="space-y-4">
+      <Segmented
+        size="sm"
+        ariaLabel="Sorular görünümü"
+        value={view}
+        onChange={setView}
+        options={[
+          { value: "banka", label: "Soru bankası" },
+          { value: "yz", label: "Yapay zekâya sorulanlar" },
+        ]}
+      />
+      {view === "banka" ? <QuestionBank studentId={studentId} audience="counselor" /> : <CounselorAi studentId={studentId} />}
+    </div>
+  );
+}
+
 type Tab = "ozet" | "program" | "saatler" | "denemeler" | "gunluk" | "konular" | "sorular" | "gorusmeler" | "veli" | "notlar" | "hesap";
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "ozet", label: "Özet", icon: "chart" },
@@ -747,7 +772,7 @@ const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "konular", label: "Konular", icon: "book" },
   { value: "sorular", label: "Sorular", icon: "question" },
   { value: "gorusmeler", label: "Görüşmeler", icon: "video" },
-  { value: "veli", label: "Veli raporu", icon: "printer" },
+  { value: "veli", label: "Veli", icon: "message" },
   { value: "notlar", label: "Notlar", icon: "note" },
   { value: "hesap", label: "Hesap", icon: "user" },
 ];
@@ -805,7 +830,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           {!student.is_active && <Badge tone="danger">Pasif</Badge>}
           {student.field && <Badge tone="primary">{student.field}</Badge>}
           {student.grade && <Badge>{student.grade}</Badge>}
-          {student.exam_year && <Badge>YKS {student.exam_year}</Badge>}
+          {student.exam_year && <Badge>{sinavOf(student.field)} {student.exam_year}</Badge>}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
@@ -839,7 +864,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
             <BadgesCard studentId={student.id} />
           </div>
         )}
-        {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} field={student.field} />}
+        {tab === "program" && <WeeklyPlanView key={student.id} studentId={student.id} field={student.field} grade={student.grade} />}
         {tab === "saatler" && (
           <div className="max-w-3xl">
             <ScheduleSection key={student.id} studentId={student.id} editable />
@@ -862,7 +887,7 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         )}
         {tab === "sorular" && (
           <div className="max-w-3xl">
-            <QuestionBank studentId={student.id} audience="counselor" />
+            <SorularTab studentId={student.id} />
           </div>
         )}
         {tab === "gorusmeler" && (
@@ -871,7 +896,8 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
           </div>
         )}
         {tab === "veli" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl space-y-4">
+            <ParentMessagesCard studentId={student.id} />
             <ParentReport student={student} />
           </div>
         )}
@@ -956,6 +982,7 @@ export function CounselorApp() {
   if (route.v === "hatirlatma") return <ReminderCenter />;
   if (route.v === "forum") return <CounselorForum />;
   if (route.v === "gorevler") return <TaskBoard />;
+  if (route.v === "raporlar") return <CounselorWeeklyReports />;
   if (route.v === "videolar") return <CounselorVideos />;
   if (route.v === "gorusme" && route.id) return <SessionReport key={`${route.id}-${route.t ?? ""}`} studentId={route.id} sessionId={route.t} />;
   if (route.v === "ogrenci" && route.id) return <StudentDetail key={route.id} id={route.id} tab={route.t} />;

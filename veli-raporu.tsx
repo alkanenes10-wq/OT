@@ -3,10 +3,10 @@
 // Psikolojik ayrıntılar varsayılan olarak KAPALI; danışman yalnızca genel iyi oluş özetini paylaşır.
 
 import { useEffect, useMemo, useState } from "react";
-import { COURSES, courseTopicIds, isCompleted } from "./curriculum";
+import { coursesFor, courseTopicIds, isCompleted, sinavOf } from "./curriculum";
 import { errorText, fetchAnalyses, fetchLogs, fetchPlans, fetchTopicProgress, sb } from "./db";
 import { waLink } from "./ekler";
-import { addDays, avg, type DailyLog, type ExamAnalysis, fmtNum, formatTR, isRealTask, net, pct, type PlanTask, type Profile, todayISO, type TopicProgress, type WeeklyPlan } from "./lib";
+import { addDays, avg, type DailyLog, type ExamAnalysis, fmtNum, formatTR, isRealTask, net, wrongDivisor, pct, type PlanTask, type Profile, todayISO, type TopicProgress, type WeeklyPlan } from "./lib";
 import { Button, Card, ErrorBox, Icon, PageLoader, Segmented } from "./ui";
 
 type Period = 7 | 14 | 30;
@@ -14,7 +14,7 @@ type Period = 7 | 14 | 30;
 type Data = { logs: DailyLog[]; tasks: (PlanTask & { date: string })[]; topics: TopicProgress[]; exams: ExamAnalysis[] };
 
 const examNet = (a: ExamAnalysis) => {
-  const vals = Object.values(a.nets ?? {}).map((v) => net(v?.d, v?.y));
+  const vals = Object.values(a.nets ?? {}).map((v) => net(v?.d, v?.y, wrongDivisor(a.exam_type)));
   if (vals.every((v) => v == null)) return null;
   return Math.round(vals.reduce<number>((s, v) => s + (v ?? 0), 0) * 100) / 100;
 };
@@ -84,7 +84,7 @@ export function ParentReport({ student }: { student: Profile }) {
       bySubject.set(t.subject, e);
     }
     const topicMap = Object.fromEntries(data.topics.map((t) => [t.topic_id, t]));
-    const courses = COURSES.map((c) => {
+    const courses = coursesFor(student.field, student.grade).map((c) => {
       const ids = courseTopicIds(c);
       const d = ids.filter((id) => isCompleted(topicMap[id]?.status)).length;
       return { name: c.name, done: d, total: ids.length };
@@ -183,7 +183,7 @@ export function ParentReport({ student }: { student: Profile }) {
             <p className="text-xs font-semibold tracking-wide text-primary uppercase">Veli bilgilendirme raporu</p>
             <h2 className="display mt-1 text-2xl">{student.full_name}</h2>
             <p className="text-sm text-muted">
-              {[student.grade, student.field, student.exam_year ? `YKS ${student.exam_year}` : null, student.target ? `Hedef: ${student.target}` : null].filter(Boolean).join(" · ")}
+              {[student.grade, student.field, student.exam_year ? `${sinavOf(student.field)} ${student.exam_year}` : null, student.target ? `Hedef: ${student.target}` : null].filter(Boolean).join(" · ")}
             </p>
           </div>
           <div className="text-right text-sm">

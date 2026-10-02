@@ -47,6 +47,24 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncelleme 3.4 — diğer sınavlar, haftalık rapor, veli paneli, yapay zekâ ile soru çözümü
+
+**Kurulum:** dosyaları yükleyin, Supabase'de `guncelleme-hepsi.sql` dosyasını bir kez çalıştırın.
+
+- **Diğer sınavlar:** Öğrencinin "Alan" seçiminde artık **LGS (8. sınıf)** ve **KPSS (GY-GK)** de var. Seçime göre konu listesi,
+  kazanımlar, program dersleri, deneme türü ve net hesabı (LGS'de 3 yanlış 1 doğruyu götürür) değişir. **9-10-11. sınıf**
+  seçildiğinde yalnızca o sınıfa kadar olan konular gösterilir. Konu listeleri ve sınıf eşlemesi `curriculum.ts` içindedir; düzenleyebilirsiniz.
+- **Haftalık rapor:** Her pazar ~20:00'de her öğrenci için kendiliğinden oluşur (menü → Haftalık raporlar). Öğrenci İlerleme
+  sayfasında, veli kendi bağlantısında görür; uyku/kaygı gibi kişisel veriler yalnızca danışmana görünür. Veliye yayını öğrenci
+  bazında kapatabilir, rapora kısa not ekleyebilirsiniz.
+- **Veli paneli:** Mevcut şifresiz veli bağlantısına haftalık rapor arşivi, yaklaşan görüşmeler ve danışmana mesaj bölümü eklendi.
+  Veli mesajları öğrencinin "Veli" sekmesinde ve ana sayfadaki "Bugün ilgilenmem gerekenler" kutusunda görünür.
+- **Yapay zekâ ile soru çözümü:** Öğrenci Sorular → "Yapay zekâya sor" bölümünden fotoğraf yükler; önce ipucu alır, denedikten
+  sonra isterse adım adım çözümü açar. Çalışması için Vercel → Settings → Environment Variables'a `ANTHROPIC_API_KEY`
+  ekleyip Redeploy yapın (anahtar: console.anthropic.com → API Keys; kullandıkça ödenir). İsteğe bağlı: `AI_DAILY_LIMIT`
+  (öğrenci başına günlük soru, varsayılan 5), `ANTHROPIC_MODEL` (varsayılan `claude-sonnet-5-5`). Öğrenci bazında sınırı
+  öğrencinin Sorular sekmesinden değiştirebilir ya da 0 yaparak kapatabilirsiniz. Anahtarı kimseyle paylaşmayın.
+
 ## Güncelleme 3.3 — kullanım kolaylığı
 
 SQL gerekmez. Yeni dosyalar: `bugun-kutusu.tsx`, `durum.tsx`.

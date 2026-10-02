@@ -7,7 +7,7 @@
 // • Dil kazanç odaklıdır ("serine 1 gün ekle"), kayıp/korku vurgusu yapılmaz.
 
 import { useEffect, useMemo, useState } from "react";
-import { COURSES, ALL_TOPICS } from "./curriculum";
+import { ALL_TOPICS, COURSES, EK_COURSES, sinavOf } from "./curriculum";
 import { sb, useAuth } from "./db";
 import { fmtNum } from "./lib";
 import { Button, Card, Modal, cx, portal, useToast } from "./ui";
@@ -37,6 +37,7 @@ export type GameStats = {
   months?: MonthStat[];
   goals?: MonthGoalRow[];
   special?: string[];
+  field?: string | null;
   n: number;
   streak_top: number | null;
   week_top: number | null;
@@ -147,10 +148,14 @@ function nextSpecial(today: string) {
 /* Ders tamamlama                                                       */
 /* ------------------------------------------------------------------ */
 const TOPIC_IDS = new Set(ALL_TOPICS.map((t) => t.id));
-const SECTIONS = COURSES.flatMap((c) => c.sections);
+/** Öğrencinin sınavına ait bölümler (alan bilgisi yoksa bitirdiği konulardan anlaşılır) */
+function sectionsOf(s: GameStats) {
+  const sinav = s.field !== undefined ? sinavOf(s.field) : (s.topics_done ?? []).some((t) => t.startsWith("lgs-")) ? "LGS" : (s.topics_done ?? []).some((t) => t.startsWith("kpss-")) ? "KPSS" : "YKS";
+  return (sinav === "YKS" ? COURSES : EK_COURSES.filter((c) => c.sinav === sinav)).flatMap((c) => c.sections);
+}
 function sectionProgress(s: GameStats) {
   const done = new Set(s.topics_done ?? []);
-  return SECTIONS.map((sec) => {
+  return sectionsOf(s).map((sec) => {
     const total = sec.topics.length;
     const d = sec.topics.filter((t) => done.has(t.id)).length;
     return { sec, done: d, total, complete: total > 0 && d === total };
@@ -777,7 +782,7 @@ function SectionsBox({ stats }: { stats: GameStats }) {
       <SectionTitle>Ders tamamlama</SectionTitle>
       <div className="rounded-xl border border-line p-3">
         <p className="mb-2 text-xs leading-relaxed text-muted">
-          Bir dersin (ör. TYT Türkçe) Konu takibindeki konularının hepsini &quot;Bitti&quot; ya da &quot;Tekrar edildi&quot; olarak işaretlediğinde o dersin rozetini kazanırsın. Toplam {rows.length} ders rozeti var; her dersin rozeti bir kez verilir.
+          Bir dersin Konu takibindeki konularının hepsini &quot;Bitti&quot; ya da &quot;Tekrar edildi&quot; olarak işaretlediğinde o dersin rozetini kazanırsın. Toplam {rows.length} ders rozeti var; her dersin rozeti bir kez verilir.
         </p>
         <ul className="space-y-2">
           {shown.map((x) => (

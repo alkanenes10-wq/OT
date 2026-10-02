@@ -14,6 +14,7 @@ const hhmm = (ts: string) => new Date(ts).toLocaleTimeString("tr-TR", { hour: "2
 export function TodoBox({ rows }: { rows: TodoRow[] }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [forum, setForum] = useState(0);
+  const [veli, setVeli] = useState<string[]>([]);
   const today = todayISO();
 
   useEffect(() => {
@@ -28,10 +29,15 @@ export function TodoBox({ rows }: { rows: TodoRow[] }) {
       .lt("starts_at", end.toISOString())
       .order("starts_at")
       .then(({ data }) => setSessions((data ?? []) as Session[]));
-    Promise.all([
-      sb().from("forum_posts").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      sb().from("forum_answers").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    ]).then(([p, a]) => setForum((p.count ?? 0) + (a.count ?? 0)));
+    sb()
+      .rpc("forum_queue")
+      .then(({ data }) => setForum(((data ?? []) as { status: string }[]).filter((x) => x.status === "pending").length));
+    sb()
+      .from("parent_messages")
+      .select("student_id")
+      .eq("from_parent", true)
+      .is("read_at", null)
+      .then(({ data }) => setVeli([...new Set(((data ?? []) as { student_id: string }[]).map((m) => m.student_id))]));
   }, []);
 
   const active = rows.filter((r) => r.student.is_active);
@@ -41,7 +47,8 @@ export function TodoBox({ rows }: { rows: TodoRow[] }) {
     .sort((a, b) => (a.lastLog ?? "").localeCompare(b.lastLog ?? ""));
   const late = active.filter((r) => r.overdue >= 3).sort((a, b) => b.overdue - a.overdue);
   const noPlan = active.filter((r) => !r.hasPlan);
-  const total = sessions.length + silent.length + late.length + noPlan.length + (forum ? 1 : 0);
+  const veliRows = veli.filter((id) => name.has(id));
+  const total = sessions.length + silent.length + late.length + noPlan.length + (forum ? 1 : 0) + veliRows.length;
 
   return (
     <Card
@@ -87,6 +94,13 @@ export function TodoBox({ rows }: { rows: TodoRow[] }) {
             <Group icon="plus" title={`Bu hafta programı olmayan (${noPlan.length})`}>
               {noPlan.slice(0, 6).map((r) => (
                 <Item key={r.student.id} to={{ v: "ogrenci", id: r.student.id, t: "program" }} main={r.student.full_name} action="Program hazırla" />
+              ))}
+            </Group>
+          )}
+          {veliRows.length > 0 && (
+            <Group icon="message" title={`Okunmamış veli mesajı (${veliRows.length})`}>
+              {veliRows.map((id) => (
+                <Item key={id} to={{ v: "ogrenci", id, t: "veli" }} main={name.get(id) ?? "Öğrenci"} sub="velisinden yeni mesaj" action="Oku" />
               ))}
             </Group>
           )}

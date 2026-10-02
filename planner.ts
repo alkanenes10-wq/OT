@@ -3,7 +3,7 @@
 // konu takibi ve önceki haftaların programları.
 // Çıktı: her gün için saat saat bloklar; bloklar bir sayısal, bir sözel sırasıyla dizilir.
 // Sonuç danışman tarafından tabloda serbestçe düzenlenebilir.
-import { ALL_TOPICS, COURSES } from "./curriculum";
+import { ALL_COURSES as COURSES, ALL_TOPICS } from "./curriculum";
 import {
   addDays,
   categoryOfSection,

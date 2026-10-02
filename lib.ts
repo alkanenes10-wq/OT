@@ -1,6 +1,6 @@
 // Ortak yardımcılar: tipler, tarih, biçimlendirme, CSV, kullanıcı adı, ders listesi, uyarı kuralları.
 // Hem tarayıcıda hem sunucuda kullanılabilir.
-import type { TopicStatus } from "./curriculum";
+import { coursesFor, gradeLevel, sectionsOfCourses, sinavOf, type TopicStatus } from "./curriculum";
 
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "YKS Takip";
 
@@ -147,6 +147,9 @@ export const SAYISAL_SECTIONS = [
   "ayt-kimya",
   "tyt-biyoloji",
   "ayt-biyoloji",
+  "lgs-matematik",
+  "lgs-fen",
+  "kpss-matematik",
 ];
 export const categoryOfSection = (sectionId: string): Category => (SAYISAL_SECTIONS.includes(sectionId) ? "sayisal" : "sozel");
 export function categoryOfSubject(subject: string): Category | null {
@@ -163,8 +166,25 @@ export const FIELD_SECTIONS: Record<string, string[]> = {
   "SÖZ": ["tyt-matematik", "tyt-turkce", "ayt-edebiyat", "tyt-tarih", "ayt-tarih", "tyt-cografya", "ayt-cografya", "tyt-felsefe", "tyt-din"],
   "DİL": ["tyt-matematik", "geometri", "tyt-turkce"],
   TYT: ["tyt-matematik", "geometri", "tyt-fizik", "tyt-kimya", "tyt-biyoloji", "tyt-turkce", "tyt-tarih", "tyt-cografya", "tyt-felsefe", "tyt-din"],
+  LGS: ["lgs-matematik", "lgs-fen", "lgs-turkce", "lgs-inkilap", "lgs-din", "lgs-ingilizce"],
+  KPSS: ["kpss-matematik", "kpss-turkce", "kpss-tarih", "kpss-cografya", "kpss-vatandaslik"],
 };
-export const sectionsForField = (field: string | null | undefined) => FIELD_SECTIONS[field ?? ""] ?? FIELD_SECTIONS.TYT;
+/** Alana (ve ara sınıflarda sınıfa) göre programda yer alacak bölümler */
+export function sectionsForField(field: string | null | undefined, grade?: string | null): string[] {
+  const secs = FIELD_SECTIONS[field ?? ""] ?? FIELD_SECTIONS.TYT;
+  if (sinavOf(field) !== "YKS" || gradeLevel(grade) >= 12) return secs;
+  const open = new Set(sectionsOfCourses(coursesFor(field, grade)).map((x) => x.id));
+  return secs.filter((x) => open.has(x));
+}
+
+/** Sınav adı ve deneme türleri (öğrencinin sınavına göre) */
+export const examName = (field: string | null | undefined) => sinavOf(field);
+export function examTypesFor(field: string | null | undefined): ExamAnalysis["exam_type"][] {
+  const s = sinavOf(field);
+  return s === "LGS" ? ["LGS", "BRANS"] : s === "KPSS" ? ["KPSS", "BRANS"] : ["TYT", "AYT", "BRANS"];
+}
+/** Kaç yanlış bir doğruyu götürür: LGS'de 3, diğerlerinde 4 */
+export const wrongDivisor = (type: string | null | undefined) => (type === "LGS" ? 3 : 4);
 
 /** İçeriği olan (boş olmayan) görev mi? */
 export const isRealTask = (t: Pick<PlanTask, "topic_id" | "content" | "target_questions">) =>
@@ -194,7 +214,7 @@ export type ExamAnalysis = {
   student_id: string;
   exam_date: string;
   title: string;
-  exam_type: "TYT" | "AYT" | "BRANS";
+  exam_type: "TYT" | "AYT" | "BRANS" | "LGS" | "KPSS";
   nets: Record<string, { d?: number | null; y?: number | null }>;
   results: { topic_id: string; wrong?: number; empty?: number }[];
   file_path: string | null;
@@ -220,11 +240,28 @@ export const EXAM_SECTIONS: Record<ExamAnalysis["exam_type"], { name: string; co
     { name: "Coğrafya-1", count: 6 },
   ],
   BRANS: [{ name: "Branş", count: 40 }],
+  LGS: [
+    { name: "Türkçe", count: 20 },
+    { name: "Matematik", count: 20 },
+    { name: "Fen", count: 20 },
+    { name: "İnkılap", count: 10 },
+    { name: "Din", count: 10 },
+    { name: "İngilizce", count: 10 },
+  ],
+  KPSS: [
+    { name: "Türkçe", count: 30 },
+    { name: "Matematik", count: 30 },
+    { name: "Tarih", count: 27 },
+    { name: "Coğrafya", count: 18 },
+    { name: "Vatandaşlık", count: 9 },
+    { name: "Güncel", count: 6 },
+  ],
 };
 
-export function net(d?: number | null, y?: number | null): number | null {
+/** Net = doğru − yanlış / bölen (YKS ve KPSS'de 4, LGS'de 3) */
+export function net(d?: number | null, y?: number | null, divisor = 4): number | null {
   if (d == null && y == null) return null;
-  return Math.round(((d ?? 0) - (y ?? 0) / 4) * 100) / 100;
+  return Math.round(((d ?? 0) - (y ?? 0) / divisor) * 100) / 100;
 }
 
 export type TimeBlock = { start: string; end: string; label: string };
@@ -279,8 +316,17 @@ export type CounselorNote = {
   created_at: string;
 };
 
-export const FIELDS = ["SAY", "EA", "SÖZ", "DİL", "TYT"] as const;
-export const GRADES = ["9. sınıf", "10. sınıf", "11. sınıf", "12. sınıf", "Mezun"] as const;
+export const FIELDS = ["SAY", "EA", "SÖZ", "DİL", "TYT", "LGS", "KPSS"] as const;
+export const FIELD_LABELS: Record<string, string> = {
+  SAY: "YKS · Sayısal",
+  EA: "YKS · Eşit ağırlık",
+  "SÖZ": "YKS · Sözel",
+  "DİL": "YKS · Dil",
+  TYT: "YKS · Yalnızca TYT",
+  LGS: "LGS (8. sınıf)",
+  KPSS: "KPSS (GY-GK)",
+};
+export const GRADES = ["8. sınıf", "9. sınıf", "10. sınıf", "11. sınıf", "12. sınıf", "Mezun"] as const;
 
 /* ==================================================================
    TARİH
@@ -470,6 +516,14 @@ export const DEFAULT_SUBJECTS = [
   "GÜNLÜK TEKRAR",
 ];
 
+const LGS_SUBJECTS = ["LGS TÜRKÇE", "LGS MATEMATİK", "FEN BİLİMLERİ", "İNKILAP TARİHİ", "LGS DİN KÜLTÜRÜ", "İNGİLİZCE", "PARAGRAF", "GÜNLÜK TEKRAR"];
+const KPSS_SUBJECTS = ["KPSS TÜRKÇE", "KPSS MATEMATİK", "KPSS TARİH", "KPSS COĞRAFYA", "VATANDAŞLIK", "PARAGRAF", "PROBLEM", "GÜNLÜK TEKRAR"];
+/** Öğrencinin sınavına göre programdaki ders satırları */
+export function subjectsFor(field: string | null | undefined): string[] {
+  const s = sinavOf(field);
+  return s === "LGS" ? LGS_SUBJECTS : s === "KPSS" ? KPSS_SUBJECTS : DEFAULT_SUBJECTS;
+}
+
 // Ders satırı → konu takibindeki bölümler (görev eklerken konu seçimi için)
 export const SUBJECT_SECTIONS: Record<string, string[]> = {
   "TÜRKÇE": ["tyt-turkce"],
@@ -489,6 +543,17 @@ export const SUBJECT_SECTIONS: Record<string, string[]> = {
   "TYT BİYOLOJİ": ["tyt-biyoloji"],
   "AYT BİYOLOJİ": ["ayt-biyoloji"],
   "DİN KÜLTÜRÜ": ["tyt-din"],
+  "LGS TÜRKÇE": ["lgs-turkce"],
+  "LGS MATEMATİK": ["lgs-matematik"],
+  "FEN BİLİMLERİ": ["lgs-fen"],
+  "İNKILAP TARİHİ": ["lgs-inkilap"],
+  "LGS DİN KÜLTÜRÜ": ["lgs-din"],
+  "İNGİLİZCE": ["lgs-ingilizce"],
+  "KPSS TÜRKÇE": ["kpss-turkce"],
+  "KPSS MATEMATİK": ["kpss-matematik"],
+  "KPSS TARİH": ["kpss-tarih"],
+  "KPSS COĞRAFYA": ["kpss-cografya"],
+  "VATANDAŞLIK": ["kpss-vatandaslik"],
 };
 
 /** Konu → programdaki ders satırı */

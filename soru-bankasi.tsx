@@ -5,8 +5,8 @@
 
 import { ShareToForum } from "./forum";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { A, errorText, sb } from "./db";
-import { DEFAULT_SUBJECTS, formatTR, relativeDay } from "./lib";
+import { useStudentMeta, A, errorText, sb } from "./db";
+import { formatTR, relativeDay, subjectsFor } from "./lib";
 import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, Modal, PageLoader, Segmented, useToast } from "./ui";
 
 const BUCKET = "sorular";
@@ -329,6 +329,7 @@ function AddQuestion({ studentId, onClose, onSaved }: { studentId: string; onClo
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [solution, setSolution] = useState<File | null>(null);
+  const DEFAULT_SUBJECTS = subjectsFor(useStudentMeta(studentId).field);
   const [subject, setSubject] = useState(DEFAULT_SUBJECTS[1] ?? "");
   const [source, setSource] = useState("");
   const [answer, setAnswer] = useState<Choice | "">("");

@@ -2,6 +2,7 @@
 //   /api/bildirim/gorev   → bugünkü görevleri bitmemiş öğrencilere (TR ~18:00)
 //   /api/bildirim/gunluk  → günlük takibini doldurmamış öğrencilere (TR ~21:00)
 //   /api/bildirim/ozet    → danışmana akşam özeti (TR ~21:30)
+//   /api/bildirim/haftalik → pazar akşamı (TR ~20:00) haftalık raporları oluşturur; öğrenciye ve danışmana bildirir
 //   POST /api/bildirim/gonder → danışmanın seçtiği öğrencilere anında uygulama bildirimi + uygulama içi not
 // Güvenlik: Vercel, CRON_SECRET ortam değişkenini "Authorization: Bearer …" başlığıyla gönderir.
 // Not: GitHub'a düz yüklemede bu dosyanın adı "bildirim-route.ts"dir; hazirla.mjs onu doğru klasöre taşır.
@@ -42,7 +43,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
   const { tur } = await ctx.params;
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
-  if (!["gorev", "gunluk", "ozet"].includes(tur)) return new Response("Not found", { status: 404 });
+  if (!["gorev", "gunluk", "ozet", "haftalik"].includes(tur)) return new Response("Not found", { status: 404 });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -58,7 +59,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
   if (e1) return Response.json({ ok: false, error: e1.message }, { status: 500 });
   const subs = (subsRaw ?? []) as Sub[];
   const userIds = [...new Set(subs.map((s) => s.user_id))];
-  if (!userIds.length) return Response.json({ ok: true, sent: 0, note: "abone yok" });
+  if (!userIds.length && tur !== "haftalik") return Response.json({ ok: true, sent: 0, note: "abone yok" });
   const prefs = await chunked<{ user_id: string; gunluk: boolean; gorev: boolean; ozet: boolean }>(userIds, (c) => db.from("notify_prefs").select("*").in("user_id", c));
   const prefOf = new Map(prefs.map((p) => [p.user_id, p]));
   const profiles = await chunked<{ id: string; role: string; full_name: string; is_active: boolean; counselor_id: string | null }>(userIds, (c) =>
@@ -68,7 +69,31 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
 
   const messages = new Map<string, Msg>();
 
-  if (tur === "gunluk" || tur === "gorev") {
+  if (tur === "haftalik") {
+    // Raporlar herkes için oluşturulur (bildirimi kapalı olsa da uygulamada görünür)
+    type Rep = { student_id: string; counselor_id: string | null; full_name: string; data: { tasks_total: number; tasks_done: number; solved: number; active_days: number; prev?: { solved: number } } };
+    const { data: reps, error: re } = await db.rpc("generate_weekly_reports_all");
+    if (re) return Response.json({ ok: false, error: /generate_weekly_reports_all/.test(re.message) ? "guncelleme-hepsi.sql çalıştırılmalı" : re.message }, { status: 500 });
+    const list = (reps ?? []) as Rep[];
+    const wantsWeekly = (uid: string) => (prefOf.get(uid) as { haftalik?: boolean } | undefined)?.haftalik ?? true;
+    const perCounselor = new Map<string, number>();
+    for (const r of list) {
+      if (r.counselor_id) perCounselor.set(r.counselor_id, (perCounselor.get(r.counselor_id) ?? 0) + 1);
+      if (!wantsWeekly(r.student_id)) continue;
+      const d = r.data;
+      const ad = r.full_name.split(" ")[0];
+      const diff = d.prev ? d.solved - d.prev.solved : 0;
+      const bits = [`${d.tasks_done}/${d.tasks_total} görev`, `${d.solved} soru`, `${d.active_days} aktif gün`];
+      messages.set(r.student_id, {
+        title: "Haftalık özetin hazır",
+        body: `${ad}, bu hafta: ${bits.join(" · ")}${diff > 0 ? `. Geçen haftadan ${diff} soru fazla.` : "."} Ayrıntılar İlerleme sayfasında.`,
+        url: "/?v=ilerleme",
+        tag: "haftalik",
+      });
+    }
+    for (const [cid, n] of perCounselor)
+      if (wantsWeekly(cid)) messages.set(cid, { title: "Haftalık raporlar hazır", body: `${n} öğrencinin bu haftaki raporu oluşturuldu. Veliye gitmeden önce göz atabilirsiniz.`, url: "/?v=raporlar", tag: "haftalik" });
+  } else if (tur === "gunluk" || tur === "gorev") {
     const students = profiles.filter((p) => p.role === "student" && p.is_active && wants(p.id, tur));
     const ids = students.map((s) => s.id);
     // Seri bilgisi (guncelleme-14: notify_streaks). Yoksa sayısız, yine kazanç odaklı metin kullanılır.
@@ -153,6 +178,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ tur: string }> 
       const parts = [`${ids.length - logged.size}/${ids.length} öğrenci bugün günlüğünü doldurmadı`];
       if (alerts) parts.push(`${alerts} açık destek uyarısı`);
       if (forum) parts.push(`forumda ${forum} onay bekleyen`);
+      const veli = await db.from("parent_messages").select("id", { count: "exact", head: true }).in("student_id", ids).eq("from_parent", true).is("read_at", null);
+      if (veli.count) parts.push(`${veli.count} okunmamış veli mesajı`);
       messages.set(c.id, { title: "Bugünün özeti", body: parts.join(" · "), url: alerts ? "/" : forum ? "/?v=forum" : "/?v=hatirlatma", tag: "ozet" });
     }
   }

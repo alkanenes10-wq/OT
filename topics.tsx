@@ -2,8 +2,8 @@
 // Konu takibi (Excel şablonundaki ders sayfaları).
 
 import { useEffect, useMemo, useState } from "react";
-import { COURSES, courseTopicIds, isCompleted, STATUS_LABELS, STATUS_ORDER, type Topic, type TopicStatus } from "./curriculum";
-import { errorText, fetchTopicProgress, sb } from "./db";
+import { courseTopicIds, sectionTag, isCompleted, STATUS_LABELS, STATUS_ORDER, type Topic, type TopicStatus } from "./curriculum";
+import { errorText, fetchTopicProgress, sb, useStudentCourses } from "./db";
 import { downloadCSV, formatTR, pct, todayISO, type TopicProgress } from "./lib";
 import { KAZANIMLAR } from "./kazanimlar";
 import { TopicOutcomes } from "./konu-bilgi";
@@ -21,6 +21,7 @@ export function TopicTracker({ studentId, studentName }: { studentId: string; st
   const [progress, setProgress] = useState<Record<string, TopicProgress>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const COURSES = useStudentCourses(studentId);
   const [courseId, setCourseId] = useState(COURSES[0].id);
   const [filter, setFilter] = useState<"all" | "open">("all");
   const [openTopic, setOpenTopic] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export function TopicTracker({ studentId, studentName }: { studentId: string; st
     const total = perCourse.reduce((s, c) => s + c.total, 0);
     const done = perCourse.reduce((s, c) => s + c.done, 0);
     return { perCourse, total, done };
-  }, [progress]);
+  }, [progress, COURSES]);
 
   async function update(topic: Topic, patch: Partial<Pick<TopicProgress, "status" | "note">>) {
     const prev = progress[topic.id];
@@ -176,7 +177,7 @@ export function TopicTracker({ studentId, studentName }: { studentId: string; st
           <section key={section.id} className="card overflow-hidden">
             <header className="flex items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-2.5">
               <h3 className="text-sm font-semibold">
-                {section.title} <Badge tone={section.exam === "TYT" ? "primary" : "neutral"}>{section.exam}</Badge>
+                {section.title} <Badge tone={section.exam === "TYT" ? "primary" : "neutral"}>{sectionTag(section)}</Badge>
               </h3>
               <span className="text-xs text-muted tabular">
                 {done}/{section.topics.length}

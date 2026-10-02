@@ -3,6 +3,7 @@
 
 import { flushSync } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { coursesFor, type Course } from "./curriculum";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { emptySchedule, type DailyLog, type ExamAnalysis, type PlanDay, type PlanTask, type Profile, type StudySchedule, type TopicProgress, type WeeklyPlan } from "./lib";
 
@@ -203,6 +204,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+const metaCache = new Map<string, { field: string | null; grade: string | null }>();
+/** Öğrencinin alanı ve sınıfı (sınav türü ve ara sınıf süzgeci için). Öğrencinin kendi ekranında profilden, danışmanda sorgudan gelir. */
+export function useStudentMeta(studentId: string): { field: string | null; grade: string | null; ready: boolean } {
+  const { profile } = useAuth();
+  const own = profile?.id === studentId ? { field: profile.field, grade: profile.grade } : null;
+  const [meta, setMeta] = useState(own ?? metaCache.get(studentId) ?? null);
+  useEffect(() => {
+    if (own || metaCache.has(studentId)) return;
+    let alive = true;
+    sb()
+      .from("profiles")
+      .select("field, grade")
+      .eq("id", studentId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const m = { field: (data as { field: string | null } | null)?.field ?? null, grade: (data as { grade: string | null } | null)?.grade ?? null };
+        metaCache.set(studentId, m);
+        if (alive) setMeta(m);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [studentId, own]);
+  const m = own ?? meta;
+  return { field: m?.field ?? null, grade: m?.grade ?? null, ready: m != null };
+}
+/** Öğrencinin sınavına ve sınıfına göre dersleri */
+export function useStudentCourses(studentId: string): Course[] {
+  const m = useStudentMeta(studentId);
+  return coursesFor(m.field, m.grade);
 }
 
 export function useAuth(): AuthState {

@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/bildirim/gorev", "schedule": "0 15 * * *" },
     { "path": "/api/bildirim/gunluk", "schedule": "0 18 * * *" },
-    { "path": "/api/bildirim/ozet", "schedule": "30 18 * * *" }
+    { "path": "/api/bildirim/ozet", "schedule": "30 18 * * *" },
+    { "path": "/api/bildirim/haftalik", "schedule": "0 17 * * 0" }
   ]
 }

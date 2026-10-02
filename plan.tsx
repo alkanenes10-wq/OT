@@ -5,11 +5,10 @@
 import { KAZANIMLAR } from "./kazanimlar";
 import { TopicOutcomes } from "./konu-bilgi";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ALL_TOPICS, COURSES } from "./curriculum";
+import { ALL_COURSES, ALL_TOPICS, coursesFor, gradeLevel, sectionsOfCourses, sinavOf, topicGrade } from "./curriculum";
 import { errorText, fetchAnalyses, fetchPlanDetail, fetchPlans, fetchSchedule, fetchTopicProgress, sb, useAuth, useRoute } from "./db";
 import {
   DAY_LEVELS,
-  DEFAULT_SUBJECTS,
   EXTRA_SUBJECT_SUGGESTIONS,
   SUBJECT_SECTIONS,
   TASK_TYPES,
@@ -30,6 +29,7 @@ import {
   pickCurrentPlan,
   rangeMinutes,
   sectionsForField,
+  subjectsFor,
   timeToMinutes,
   todayISO,
   type DayLevel,
@@ -68,7 +68,7 @@ import {
 } from "./ui";
 
 const topicName = new Map(ALL_TOPICS.map((t) => [t.id, t.name]));
-const sectionTitle = new Map(COURSES.flatMap((c) => c.sections.map((s) => [s.id, s.title] as const)));
+const sectionTitle = new Map(ALL_COURSES.flatMap((c) => c.sections.map((s) => [s.id, s.title] as const)));
 const hasText = (t: PlanTask) => Boolean(t.topic_id || t.content.trim() || t.target_questions);
 export const taskTitle = (t: PlanTask) => (t.topic_id ? (topicName.get(t.topic_id) ?? t.topic_id) : t.content.trim() || t.subject);
 const typeShort = (t: TaskType) => TASK_TYPES.find((x) => x.value === t)?.short ?? "";
@@ -101,6 +101,17 @@ const GRID_SUBJECTS = [
   "COĞRAFYA",
   "FELSEFE",
   "DİN KÜLTÜRÜ",
+  "LGS MATEMATİK",
+  "FEN BİLİMLERİ",
+  "LGS TÜRKÇE",
+  "İNKILAP TARİHİ",
+  "LGS DİN KÜLTÜRÜ",
+  "İNGİLİZCE",
+  "KPSS MATEMATİK",
+  "KPSS TÜRKÇE",
+  "KPSS TARİH",
+  "KPSS COĞRAFYA",
+  "VATANDAŞLIK",
   "PARAGRAF",
   "PROBLEM",
   "GÜNLÜK TEKRAR",
@@ -128,7 +139,8 @@ export async function patchTask(id: string, patch: Partial<PlanTask>): Promise<P
 }
 
 /* ================================================================== */
-export function WeeklyPlanView({ studentId, field }: { studentId: string; field?: string | null }) {
+export function WeeklyPlanView({ studentId, field, grade }: { studentId: string; field?: string | null; grade?: string | null }) {
+  const firstSubject = subjectsFor(field)[0];
   const toast = useToast();
   const { profile } = useAuth();
   const isCounselor = profile?.role === "counselor";
@@ -424,13 +436,14 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
               tasks={real}
               onToggle={toggle}
               onEdit={(t) => setEditing(t)}
-              onAdd={(d, time) => setEditing({ day_index: d, subject: "TÜRKÇE", task_type: "soru", start_time: time, duration_min: time ? 40 : null })}
+              onAdd={(d, time) => setEditing({ day_index: d, subject: firstSubject, task_type: "soru", start_time: time, duration_min: time ? 40 : null })}
               onMove={moveTask}
             />
           ) : view === "tablo" ? (
             <WeekGrid
               plan={plan}
               field={field}
+              grade={grade}
               tasks={real}
               days={days}
               onToggle={toggle}
@@ -466,6 +479,8 @@ export function WeeklyPlanView({ studentId, field }: { studentId: string; field?
         <TaskEditor
           plan={plan}
           studentId={studentId}
+          field={field}
+          grade={grade}
           weekTopics={real.map((t) => t.topic_id).filter((x): x is string => Boolean(x))}
           task={editing}
           onClose={() => setEditing(null)}
@@ -530,6 +545,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function WeekGrid({
   plan,
   field,
+  grade,
   tasks,
   days,
   onToggle,
@@ -540,6 +556,7 @@ function WeekGrid({
 }: {
   plan: WeeklyPlan;
   field?: string | null;
+  grade?: string | null;
   tasks: PlanTask[];
   days: PlanDay[];
   onToggle: (t: PlanTask) => void;
@@ -552,10 +569,10 @@ function WeekGrid({
   const [adding, setAdding] = useState("");
   const levels = levelsOf(plan);
   const dates = Array.from({ length: 7 }, (_, i) => addDays(plan.start_date, i));
-  const fieldSecs = field ? sectionsForField(field) : null;
+  const fieldSecs = field ? sectionsForField(field, grade) : null;
   const base = fieldSecs
     ? GRID_SUBJECTS.filter((s) => !SUBJECT_SECTIONS[s] || s === "PARAGRAF" || s === "PROBLEM" ? true : SUBJECT_SECTIONS[s].some((x) => fieldSecs.includes(x)))
-    : DEFAULT_SUBJECTS;
+    : subjectsFor(field);
   const all = [...base, ...tasks.map((t) => t.subject), ...extra];
   const subjects = all.filter((s, i) => all.indexOf(s) === i).sort((a, b) => subjectOrder(a) - subjectOrder(b));
   const today = todayISO();
@@ -1006,12 +1023,16 @@ function TaskEditor({
   studentId,
   weekTopics,
   task,
+  field,
+  grade,
   onClose,
   onSave,
   onDelete,
 }: {
   plan: WeeklyPlan;
   studentId: string;
+  field?: string | null;
+  grade?: string | null;
   weekTopics: string[];
   task: Partial<PlanTask>;
   onClose: () => void;
@@ -1022,9 +1043,17 @@ function TaskEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<PlanTask>) => setT((x) => ({ ...x, ...patch }));
-  const subject = t.subject ?? "TÜRKÇE";
+  const subject = t.subject ?? subjectsFor(field)[0];
   const sections = SUBJECT_SECTIONS[subject] ?? [];
-  const subjects = [...DEFAULT_SUBJECTS, ...EXTRA_SUBJECT_SUGGESTIONS, ...Object.keys(SUBJECT_SECTIONS)];
+  // Yalnızca öğrencinin sınavına ait dersler ve sınıfına kadar olan konular
+  const sinav = sinavOf(field);
+  const level = sinav === "YKS" ? gradeLevel(grade) : 12;
+  const ownSections = new Set(sectionsOfCourses(coursesFor(field, grade)).map((x) => x.id));
+  const subjects = [
+    ...subjectsFor(field),
+    ...(sinav === "YKS" ? EXTRA_SUBJECT_SUGGESTIONS : ["DENEME", `${sinav} DENEME`, "KİTAP OKUMA"]),
+    ...Object.keys(SUBJECT_SECTIONS).filter((k) => SUBJECT_SECTIONS[k].some((x) => ownSections.has(x))),
+  ];
   const subjectOptions = [...subjects, subject].filter((s, i, a) => a.indexOf(s) === i);
   const num = (v: string) => (v.trim() === "" ? null : Math.min(2000, Math.max(0, Math.round(Number(v.replace(/[^\d]/g, "")) || 0))));
   const [sugs, setSugs] = useState<Candidate[] | null>(null);
@@ -1047,14 +1076,14 @@ function TaskEditor({
         start: plan.start_date,
         schedule: emptySchedule(studentId),
         sections,
-        tyt: analyses.find((a) => a.exam_type === "TYT") ?? null,
-        ayt: analyses.find((a) => a.exam_type === "AYT") ?? null,
+        tyt: analyses.find((a) => a.exam_type === (sinav === "YKS" ? "TYT" : sinav)) ?? null,
+        ayt: sinav === "YKS" ? (analyses.find((a) => a.exam_type === "AYT") ?? null) : null,
         progress,
         history: [],
         tytShare: 50,
         routines: { paragraf: false, problem: false },
         carryOver: false,
-        excluded: [...weekTopics, t.topic_id ?? ""].filter(Boolean),
+        excluded: [...weekTopics, t.topic_id ?? "", ...ALL_TOPICS.filter((x) => topicGrade(x.id) > level).map((x) => x.id)].filter(Boolean),
         allAnalyses: analyses,
       });
       setSugs(list.slice(0, 4));
@@ -1181,15 +1210,17 @@ function TaskEditor({
           >
             <select id="te-topic" className="field" value={t.topic_id ?? ""} onChange={(e) => set({ topic_id: e.target.value || null })}>
               <option value="">— Konu seçilmedi —</option>
-              {COURSES.flatMap((c) => c.sections)
+              {ALL_COURSES.flatMap((c) => c.sections)
                 .filter((s) => sections.includes(s.id))
                 .map((s) => (
                   <optgroup key={s.id} label={sectionTitle.get(s.id)}>
-                    {s.topics.map((tp) => (
-                      <option key={tp.id} value={tp.id}>
-                        {tp.name}
-                      </option>
-                    ))}
+                    {s.topics
+                      .filter((tp) => topicGrade(tp.id) <= level || tp.id === t.topic_id)
+                      .map((tp) => (
+                        <option key={tp.id} value={tp.id}>
+                          {tp.name}
+                        </option>
+                      ))}
                   </optgroup>
                 ))}
             </select>
@@ -1321,10 +1352,10 @@ function TaskEditor({
 /* ================================================================== */
 /* Otomatik program oluşturucu                                         */
 /* ================================================================== */
-const ALL_SECTIONS = COURSES.flatMap((c) => c.sections);
+
 
 function defaultShare(field: string | null, grade: string | null) {
-  if (field === "TYT" || field === "DİL") return 100;
+  if (field === "TYT" || field === "DİL" || sinavOf(field) !== "YKS") return 100;
   if (grade && /^(9|10|11)\./.test(grade)) return 70;
   return 50;
 }
@@ -1398,12 +1429,13 @@ export function GeneratorModal({
         const field = (prof.data as { field: string | null } | null)?.field ?? null;
         const grade = (prof.data as { grade: string | null } | null)?.grade ?? null;
         setData({ plans, analyses, progress, schedule, field, grade, history, books });
-        setSections(sectionsForField(field));
+        setSections(sectionsForField(field, grade));
         setTytShare(defaultShare(field, grade));
         const pre = initialAnalysisId ? analyses.find((a) => a.id === initialAnalysisId) : undefined;
-        const lastT = analyses.find((a) => a.exam_type === "TYT");
-        const lastA = analyses.find((a) => a.exam_type === "AYT");
-        setTytId((pre?.exam_type === "TYT" ? pre : lastT)?.id ?? "");
+        const main = sinavOf(field) === "YKS" ? "TYT" : sinavOf(field);
+        const lastT = analyses.find((a) => a.exam_type === main);
+        const lastA = sinavOf(field) === "YKS" ? analyses.find((a) => a.exam_type === "AYT") : undefined;
+        setTytId((pre?.exam_type === main ? pre : lastT)?.id ?? "");
         setAytId((pre?.exam_type === "AYT" ? pre : lastA)?.id ?? "");
         // Başlangıç: en son programın ertesi haftası, yoksa bugün
         const last = [...plans].sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
@@ -1427,7 +1459,8 @@ export function GeneratorModal({
       tytShare,
       routines,
       carryOver,
-      excluded,
+      // Ara sınıflarda öğrencinin sınıfından sonraki konular programa alınmaz
+      excluded: [...excluded, ...(gradeLevel(data.grade) < 12 && sinavOf(data.field) === "YKS" ? ALL_TOPICS.filter((x) => topicGrade(x.id) > gradeLevel(data.grade)).map((x) => x.id) : [])],
       pattern: pattern.split("-").map(Number) as [number, number],
       allAnalyses: data.analyses,
       books: data.books,
@@ -1479,7 +1512,7 @@ export function GeneratorModal({
   }, [result, finalBlocks]);
 
   const scheduleEmpty = data ? data.schedule.slots.every((r) => rangeMinutes(r) === 0) : false;
-  const hasAyt = sections.some((s) => ALL_SECTIONS.find((x) => x.id === s)?.exam === "AYT");
+  const hasAyt = sections.some((s) => ALL_COURSES.flatMap((c) => c.sections).find((x) => x.id === s)?.exam === "AYT");
 
   async function create() {
     if (!data || !result) return;
@@ -1569,11 +1602,12 @@ export function GeneratorModal({
             <Field label="Başlangıç tarihi" htmlFor="g-start" hint={`${dayName(start)} → ${dayName(addDays(start, 6))}`}>
               <input id="g-start" type="date" className="field" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
             </Field>
-            {(["TYT", "AYT"] as const).map((ex) => {
-              const list = data.analyses.filter((a) => a.exam_type === ex);
+            {(sinavOf(data.field) === "YKS" ? (["TYT", "AYT"] as const) : (["TYT"] as const)).map((ex) => {
+              const exType = sinavOf(data.field) === "YKS" ? ex : sinavOf(data.field);
+              const list = data.analyses.filter((a) => a.exam_type === exType);
               const val = ex === "TYT" ? tytId : aytId;
               return (
-                <Field key={ex} label={`${ex} denemesi`} htmlFor={`g-${ex}`} hint={list.length ? "Yanlış/boş konular öne alınır" : "Bu türde deneme yok"}>
+                <Field key={ex} label={`${exType} denemesi`} htmlFor={`g-${ex}`} hint={list.length ? "Yanlış/boş konular öne alınır" : "Bu türde deneme yok"}>
                   <select
                     id={`g-${ex}`}
                     className="field"
@@ -1613,7 +1647,7 @@ export function GeneratorModal({
               <p className="text-sm font-medium">
                 Dersler <span className="font-normal text-muted">· Alan: {data.field ?? "belirtilmemiş"}</span>
               </p>
-              <button className="text-xs text-primary" onClick={() => setSections(sectionsForField(data.field))}>
+              <button className="text-xs text-primary" onClick={() => setSections(sectionsForField(data.field, data.grade))}>
                 Alana göre varsayılan
               </button>
             </div>
@@ -1622,7 +1656,7 @@ export function GeneratorModal({
                 <div key={cat} className={cx("rounded-xl border p-2.5", cat === "sayisal" ? "border-say/30 bg-say-soft/40" : "border-soz/30 bg-soz-soft/40")}>
                   <p className={cx("mb-1.5 text-xs font-bold uppercase tracking-wide", cat === "sayisal" ? "text-say" : "text-soz")}>{cat === "sayisal" ? "Sayısal" : "Sözel"}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {ALL_SECTIONS.filter((s) => categoryOfSection(s.id) === cat).map((s) => {
+                    {sectionsOfCourses(coursesFor(data.field, data.grade)).filter((s) => categoryOfSection(s.id) === cat).map((s) => {
                       const on = sections.includes(s.id);
                       return (
                         <button

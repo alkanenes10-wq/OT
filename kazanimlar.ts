@@ -1,7 +1,9 @@
 // Konu kazanımları: her konuda öğrencinin sınavda yapabilmesi beklenenler (YKS kapsamı).
 // Konu kimlikleri curriculum.ts ile aynıdır. Kazanım eklemek / düzenlemek için bu dosyayı değiştirmeniz yeterli.
 
-export const KAZANIMLAR: Record<string, string[]> = {
+import { KAZANIMLAR_EK } from "./kazanimlar-ek";
+
+const KAZANIMLAR_YKS: Record<string, string[]> = {
   /* ---------------- TYT Türkçe ---------------- */
   "tyt-turkce.sozcukte-anlam": [
     "Sözcüğün gerçek, yan, mecaz ve terim anlamlarını ayırt eder.",
@@ -1017,6 +1019,9 @@ export const KAZANIMLAR: Record<string, string[]> = {
     "Geri dönüşümü ve afet yönetimini açıklar.",
   ],
 };
+
+/** Tüm sınavların kazanımları (YKS + LGS + KPSS) */
+export const KAZANIMLAR: Record<string, string[]> = { ...KAZANIMLAR_YKS, ...KAZANIMLAR_EK };
 
 /** Alt başlıkları (curriculum `sub`) listeye çevirir. "A, B (x, y), C / D" → ["A", "B (x, y)", "C", "D"] */
 export function splitSub(sub: string): string[] {

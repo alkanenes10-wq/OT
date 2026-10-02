@@ -619,7 +619,7 @@ function HBars({ rows }: { rows: [string, number][] }) {
 
 /** Deneme netleri: TYT ve AYT ayrı grafikler (ölçekleri farklı, tek eksen) */
 export function ExamTrends({ exams }: { exams: Pick<ExamAnalysis, "exam_date" | "exam_type" | "nets">[] }) {
-  const items = (["TYT", "AYT"] as const)
+  const items = (["TYT", "AYT", "LGS", "KPSS"] as const)
     .map((t) => {
       const list = exams.filter((e) => e.exam_type === t).sort((a, b) => a.exam_date.localeCompare(b.exam_date));
       return { t, list, nets: list.map((e) => netOf(e)) };
@@ -630,7 +630,7 @@ export function ExamTrends({ exams }: { exams: Pick<ExamAnalysis, "exam_date" | 
     <div className="grid gap-4 lg:grid-cols-2">
       {items.map(({ t, list, nets }) => {
         const vals = nets.filter((v): v is number => v != null);
-        const top = niceMax(Math.max(t === "TYT" ? 40 : 20, ...vals) * 1.1);
+        const top = niceMax(Math.max(t === "AYT" ? 20 : 40, ...vals) * 1.1);
         const first = vals[0];
         const lastV = vals[vals.length - 1];
         return (
@@ -655,8 +655,8 @@ export function ExamTrends({ exams }: { exams: Pick<ExamAnalysis, "exam_date" | 
   );
 }
 
-function netOf(a: Pick<ExamAnalysis, "nets">): number | null {
-  const v = Object.values(a.nets ?? {}).map((x) => net(x.d, x.y));
+function netOf(a: Pick<ExamAnalysis, "nets"> & { exam_type?: string }): number | null {
+  const v = Object.values(a.nets ?? {}).map((x) => net(x.d, x.y, a.exam_type === "LGS" ? 3 : 4));
   if (!v.some((x) => x != null)) return null;
   return Math.round(v.reduce<number>((s, x) => s + (x ?? 0), 0) * 100) / 100;
 }
