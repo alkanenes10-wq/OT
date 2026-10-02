@@ -151,32 +151,39 @@ export function DailyLogForm({
 
   if (loading) return <PageLoader />;
 
+  const prev = history.find((h) => h.log_date === addDays(date, -1)) ?? null;
+  const filledCount = [form.sleep_hours.trim() !== "", form.phone_minutes.trim() !== "", form.procrastinated != null, form.replanned != null, form.anxiety != null, form.energy != null, form.motivation != null].filter(Boolean).length;
+  const hasText = Boolean(form.obstacle || form.action_taken || form.what_worked || form.tomorrow_change);
+
   return (
     <div className="space-y-4">
       <Card title="Gün bilgileri">
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Uyku süresi (saat)" htmlFor="sleep">
-              <input
-                id="sleep"
-                className="field"
-                inputMode="decimal"
-                placeholder="ör. 7,5"
-                value={form.sleep_hours}
-                onChange={(e) => set("sleep_hours", e.target.value.replace(/[^\d.,]/g, ""))}
-              />
-            </Field>
-            <Field label="Telefon / dikkat dağıtıcı (dk)" htmlFor="phone">
-              <input
-                id="phone"
-                className="field"
-                inputMode="numeric"
-                placeholder="ör. 45"
-                value={form.phone_minutes}
-                onChange={(e) => set("phone_minutes", e.target.value.replace(/[^\d]/g, ""))}
-              />
-            </Field>
-          </div>
+          <Field label="Uyku süresi" htmlFor="sleep">
+            <QuickNumber
+              id="sleep"
+              unit="sa"
+              value={form.sleep_hours}
+              onChange={(v) => set("sleep_hours", v)}
+              options={[5, 6, 6.5, 7, 7.5, 8, 9]}
+              step={0.5}
+              max={24}
+              decimal
+              previous={prev?.sleep_hours != null ? Number(prev.sleep_hours) : null}
+            />
+          </Field>
+          <Field label="Telefon / dikkat dağıtıcı" htmlFor="phone">
+            <QuickNumber
+              id="phone"
+              unit="dk"
+              value={form.phone_minutes}
+              onChange={(v) => set("phone_minutes", v)}
+              options={[0, 30, 60, 90, 120, 180, 240]}
+              step={15}
+              max={1440}
+              previous={prev?.phone_minutes ?? null}
+            />
+          </Field>
           <div className="flex flex-col gap-1.5">
             <VarHelp k="sleep_hours" logs={history} audience={audience} />
             <VarHelp k="phone_minutes" logs={history} audience={audience} />
@@ -209,8 +216,16 @@ export function DailyLogForm({
         </div>
       </Card>
 
-      <Card title="Günün değerlendirmesi">
-        <div className="space-y-4">
+      <details className="group card" open={hasText || undefined}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-[15px] font-semibold">Günün değerlendirmesi</span>
+            <span className="block text-sm text-muted">İsteğe bağlı · engel, işe yarayan, yarın için küçük değişiklik</span>
+          </span>
+          <Icon name="chevronDown" size={18} className="shrink-0 text-faint transition group-open:rotate-180" />
+        </summary>
+        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+          <div className="space-y-4">
           {(
             [
               ["obstacle", "Bugünkü en büyük engel", "ör. Öğleden sonra telefona dalıp 1 saat kaybettim"],
@@ -231,21 +246,101 @@ export function DailyLogForm({
             </Field>
           ))}
         </div>
-      </Card>
+        </div>
+      </details>
 
       {error && <ErrorBox>{error}</ErrorBox>}
       {feedback && <DayFeedback notes={feedback} audience={audience} onClose={() => setFeedback(null)} />}
-      <div className="flex items-center justify-between gap-3">
-        {existing ? (
-          <Button variant="ghost" size="sm" icon="trash" onClick={remove}>
-            Kaydı sil
+      <div className="sticky bottom-20 z-20 flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/95 p-2.5 shadow-lg backdrop-blur md:bottom-4">
+        <div className="min-w-0 pl-1.5">
+          <p className="text-sm font-semibold tabular">
+            {filledCount}/7 alan dolu
+            {filledCount === 7 && <span className="ml-1.5 text-success">✓ eksiksiz</span>}
+          </p>
+          <span className="mt-1 flex gap-1" aria-hidden>
+            {Array.from({ length: 7 }, (_, i) => (
+              <span key={i} className={cx("h-1.5 w-4 rounded-full transition-colors", i < filledCount ? "bg-success" : "bg-surface-2 ring-1 ring-inset ring-line")} />
+            ))}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {existing && <IconButton icon="trash" label="Kaydı sil" onClick={remove} />}
+          <Button size="lg" icon="check" onClick={save} loading={saving}>
+            {existing ? "Güncelle" : "Kaydet"}
           </Button>
-        ) : (
-          <span />
-        )}
-        <Button size="lg" icon="check" onClick={save} loading={saving}>
-          {existing ? "Güncelle" : "Kaydet"}
-        </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Tek dokunuşla sayı seçimi: hazır değerler + ince ayar (−/+) + elle yazma. "Dünkü" değer işaretlenir ama kendiliğinden doldurulmaz. */
+function QuickNumber({
+  id,
+  unit,
+  value,
+  onChange,
+  options,
+  step,
+  max,
+  decimal = false,
+  previous,
+}: {
+  id: string;
+  unit: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: number[];
+  step: number;
+  max: number;
+  decimal?: boolean;
+  previous: number | null;
+}) {
+  const num = value.trim() === "" ? null : Number(value.replace(",", "."));
+  const fmt = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
+  const opts = previous != null && !options.includes(previous) ? [...options, previous].sort((a, b) => a - b) : options;
+  const bump = (d: number) => onChange(fmt(Math.max(0, Math.min(max, (num != null && !Number.isNaN(num) ? num : (previous ?? options[Math.floor(options.length / 2)])) + d))));
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {opts.map((o) => {
+          const active = num === o;
+          return (
+            <button
+              key={o}
+              type="button"
+              onClick={() => onChange(active ? "" : fmt(o))}
+              aria-pressed={active}
+              className={cx(
+                "relative h-10 min-w-12 rounded-xl border px-2.5 text-sm font-semibold transition-colors tabular",
+                active ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface text-fg hover:bg-surface-2",
+              )}
+            >
+              {fmt(o)}
+              {o === options[options.length - 1] && unit === "dk" ? "+" : ""}
+              {previous === o && !active && <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-surface-2 px-1.5 text-[9px] font-medium leading-[14px] text-muted ring-1 ring-line">dün</span>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" onClick={() => bump(-step)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-lg font-semibold hover:bg-surface-2" aria-label="Azalt">
+          −
+        </button>
+        <span className="relative w-28">
+          <input
+            id={id}
+            className="field h-10 pr-9 text-center font-semibold tabular"
+            inputMode={decimal ? "decimal" : "numeric"}
+            placeholder="—"
+            value={value}
+            onChange={(e) => onChange(e.target.value.replace(decimal ? /[^\d.,]/g : /[^\d]/g, ""))}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">{unit}</span>
+        </span>
+        <button type="button" onClick={() => bump(step)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-lg font-semibold hover:bg-surface-2" aria-label="Artır">
+          +
+        </button>
       </div>
     </div>
   );

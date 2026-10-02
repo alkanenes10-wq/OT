@@ -12,9 +12,9 @@ import { DailyLogSection } from "./daily";
 import { A, errorText, fetchLogs, fetchPlans, sb, useAuth, useRoute } from "./db";
 import { StudentInsights } from "./insights";
 import { addDays, type DailyLog, dayShort, diffDays, fmtNum, formatLong, pct, pickCurrentPlan, type PlanTask, todayISO, type WeeklyPlan, yesNo } from "./lib";
-import { byOrder, patchTask, TaskRow, WeeklyPlanView } from "./plan";
+import { byOrder, patchTask, TaskRow, taskTitle, WeeklyPlanView } from "./plan";
 import { ScheduleSection } from "./schedule";
-import { DailyReminderCard, EveningNudge, NextSessionCard, StartMode, YksCountdown, yksLabel } from "./ekler";
+import { DailyReminderCard, NextSessionCard, StartMode, YksCountdown, yksLabel } from "./ekler";
 import { QuestionBank, QuestionBankTeaser } from "./soru-bankasi";
 import { StudentSupport } from "./support";
 import { StudentNotes } from "./notes";
@@ -118,12 +118,20 @@ function Today() {
       </div>
       <InstallHint />
       <StudentSupport variant="card" />
-      <EveningNudge hasTodayLog={Boolean(todayLog)} onOpen={() => go({ v: "gunluk" })} />
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      <FocusCard
+        next={todayTasks.find((t) => !t.done) ?? null}
+        total={todayTasks.length}
+        done={doneToday}
+        hasPlan={Boolean(plan)}
+        hasLog={Boolean(todayLog)}
+        onDone={toggle}
+        onLog={() => go({ v: "gunluk" })}
+        onProgram={() => go({ v: "program" })}
+      />
       <NextSessionCard />
       {profile && <StudentNotes studentId={profile.id} />}
-      {profile && <StreakCard studentId={profile.id} />}
-      <VideoSuggestionsCard />
-      {error && <ErrorBox>{error}</ErrorBox>}
 
       {yesterdayLog?.tomorrow_change && (
         <div className="card flex items-start gap-3 border-primary/30 bg-primary-soft p-4">
@@ -164,8 +172,7 @@ function Today() {
         )}
       </Card>
 
-      <StartMode />
-      <QuestionBankTeaser studentId={profile.id} />
+      {profile && <StreakCard studentId={profile.id} />}
 
       <Card
         title="Günlük takip"
@@ -210,15 +217,114 @@ function Today() {
         </div>
       </Card>
 
-      {plan && (
-        <Card title="Bu hafta" subtitle={`${weekDone} / ${weekTasks.length} görev`}>
-          <ProgressBar value={pct(weekDone, weekTasks.length)} label="Haftalık program" />
-          <p className="mt-2 text-xs text-muted">%{pct(weekDone, weekTasks.length) ?? 0} tamamlandı</p>
-        </Card>
-      )}
+      <VideoSuggestionsCard />
+
+      <details className="group">
+        <summary className="card flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+          <span>
+            Daha fazla
+            <span className="ml-2 font-normal text-muted">
+              5 dakika modu · sorularım{plan ? ` · bu hafta ${weekDone}/${weekTasks.length} görev` : ""}
+            </span>
+          </span>
+          <Icon name="chevronDown" size={18} className="shrink-0 text-faint transition group-open:rotate-180" />
+        </summary>
+        <div className="mt-4 space-y-4">
+          <StartMode />
+          <QuestionBankTeaser studentId={profile.id} />
+          {plan && (
+            <Card title="Bu hafta" subtitle={`${weekDone} / ${weekTasks.length} görev`}>
+              <ProgressBar value={pct(weekDone, weekTasks.length)} label="Haftalık program" />
+              <p className="mt-2 text-xs text-muted">%{pct(weekDone, weekTasks.length) ?? 0} tamamlandı</p>
+            </Card>
+          )}
+        </div>
+      </details>
 
       <StudentSupport variant="link" />
     </div>
+  );
+}
+
+/** "Şimdi ne yapmalıyım?" — ekranın en üstündeki tek odak kartı */
+function FocusCard({
+  next,
+  total,
+  done,
+  hasPlan,
+  hasLog,
+  onDone,
+  onLog,
+  onProgram,
+}: {
+  next: PlanTask | null;
+  total: number;
+  done: number;
+  hasPlan: boolean;
+  hasLog: boolean;
+  onDone: (t: PlanTask) => void;
+  onLog: () => void;
+  onProgram: () => void;
+}) {
+  const [hour, setHour] = useState<number | null>(null);
+  useEffect(() => setHour(new Date().getHours()), []);
+  const evening = hour != null && hour >= 19;
+
+  if (next) {
+    return (
+      <section className="card border-primary/30 bg-primary-soft p-4 sm:p-5">
+        <p className="text-xs font-bold uppercase tracking-wide text-primary-ink">
+          Şimdi sıradaki · {done + 1}/{total}
+        </p>
+        <p className="mt-1.5 text-[11px] font-semibold tracking-wide text-muted">
+          {next.subject}
+          {next.start_time ? ` · ${next.start_time}` : ""}
+          {next.duration_min ? ` · ${next.duration_min} dk` : ""}
+        </p>
+        <p className="display text-xl leading-snug">{taskTitle(next)}</p>
+        {next.target_questions ? <p className="mt-0.5 text-sm text-muted">Hedef: {next.target_questions} soru</p> : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button icon="check" onClick={() => onDone(next)}>
+            Tamamladım
+          </Button>
+          {!hasLog && evening && (
+            <Button variant="secondary" icon="journal" onClick={onLog}>
+              Günlüğü doldur
+            </Button>
+          )}
+        </div>
+      </section>
+    );
+  }
+  if (!hasLog) {
+    return (
+      <section className="card border-primary/30 bg-primary-soft p-4 sm:p-5">
+        <p className="text-xs font-bold uppercase tracking-wide text-primary-ink">{total ? "Bugünün görevleri tamam" : "Şimdi sıradaki"}</p>
+        <p className="display mt-1.5 text-xl leading-snug">Bugünü 30 saniyede kaydet</p>
+        <p className="mt-0.5 text-sm text-muted">Uyku, telefon ve ruh hâlini işaretle; günlük serine 1 gün eklensin.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button icon="journal" onClick={onLog}>
+            Günlüğü doldur
+          </Button>
+          {!hasPlan && (
+            <Button variant="secondary" icon="calendar" onClick={onProgram}>
+              Programa git
+            </Button>
+          )}
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="card flex items-center gap-3 border-success/30 bg-success-soft p-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success text-white">
+        <Icon name="check" size={20} strokeWidth={3} />
+      </span>
+      <div className="text-sm">
+        <p className="font-semibold">Bugün için her şey tamam</p>
+        <p className="text-muted">{total ? `${done}/${total} görev bitti, günlüğün dolu.` : "Günlüğün dolu."} İyi dinlenmeler.</p>
+      </div>
+    </section>
   );
 }
 

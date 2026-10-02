@@ -14,8 +14,10 @@ import { AppearanceCard } from "./theme";
 import { CounselorSessions, AppReminder } from "./ekler";
 import { ParentReport } from "./veli-raporu";
 import { QuestionBank } from "./soru-bankasi";
-import { CounselorCalendar, TodaySessionsStrip } from "./takvim";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { CounselorCalendar } from "./takvim";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TodoBox } from "./bugun-kutusu";
+import { DbStatusBanner, DbStatusCard } from "./durum";
 import { ALL_TOPICS, isCompleted } from "./curriculum";
 import { DailyLogSection } from "./daily";
 import { createStudent, deleteStudent, updateStudent } from "./actions";
@@ -30,7 +32,7 @@ import { SupportInbox, SupportPanel } from "./support";
 import { SharedNotesCounselor } from "./notes";
 import { PageHeader } from "./shell";
 import { TopicsHub } from "./konu-analizi";
-import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Tabs, useToast, type IconName } from "./ui";
+import { Badge, Button, Card, confirmAction, cx, EmptyState, ErrorBox, Field, Icon, IconButton, LinkButton, PageLoader, ProgressBar, Segmented, Tabs, useToast, type IconName } from "./ui";
 
 /* ---------------- Danışman notları (öğrenci göremez) ---------------- */
 export function CounselorNotes({ studentId }: { studentId: string }) {
@@ -369,6 +371,8 @@ type Row = {
   anxiety: number | null;
   topicPct: number;
   signals: Signal[];
+  overdue: number;
+  hasPlan: boolean;
 };
 
 const RANK = { critical: 0, warning: 1, info: 2 } as const;
@@ -430,6 +434,8 @@ function StudentList() {
             motivation: avg(last7.map((l) => l.motivation)),
             anxiety: avg(last7.map((l) => l.anxiety)),
             topicPct: pct(done, total) ?? 0,
+            overdue: plan ? withContent.filter((t) => !t.done && addDays(plan.start_date, t.day_index) < todayISO()).length : 0,
+            hasPlan: Boolean(plan && plan.start_date <= todayISO() && todayISO() <= addDays(plan.start_date, 6)),
             signals: s.is_active ? computeSignals({ logs: sl, plan, tasks: pt }) : [],
           };
         });
@@ -469,6 +475,7 @@ function StudentList() {
           </LinkButton>
         }
       />
+      <DbStatusBanner />
       {error && <ErrorBox>{error}</ErrorBox>}
       {!rows && !error ? (
         <PageLoader />
@@ -493,7 +500,7 @@ function StudentList() {
             <Summary icon="journal" label="Bugün günlük dolduran" value={`${todayCount}/${activeRows.length}`} />
             <Summary icon="alert" label="Dikkat gerektiren" value={attention} tone={attention ? "warning" : undefined} />
           </div>
-          <TodaySessionsStrip />
+          <TodoBox rows={rows} />
           <SupportInbox names={new Map((rows ?? []).map((r) => [r.student.id, r.student.full_name]))} />
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <div className="relative min-w-0 flex-1">
@@ -745,6 +752,14 @@ const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "hesap", label: "Hesap", icon: "user" },
 ];
 
+/** Sekmeler dört grupta toplanır: üstte grup, altında o grubun sekmeleri */
+const TAB_GROUPS: { id: string; label: string; tabs: Tab[] }[] = [
+  { id: "genel", label: "Genel", tabs: ["ozet", "notlar", "gorusmeler"] },
+  { id: "calisma", label: "Çalışma", tabs: ["program", "saatler", "konular", "sorular"] },
+  { id: "takip", label: "Takip", tabs: ["gunluk", "denemeler"] },
+  { id: "veli", label: "Veli ve hesap", tabs: ["veli", "hesap"] },
+];
+
 function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
   const { go } = useRoute();
   const [student, setStudent] = useState<Profile | null>(null);
@@ -762,6 +777,10 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
     load();
   }, [load]);
 
+  const group = TAB_GROUPS.find((g) => g.tabs.includes(tab)) ?? TAB_GROUPS[0];
+  // Her grupta en son açılan sekme hatırlanır
+  const lastTab = useRef<Record<string, Tab>>({});
+  lastTab.current[group.id] = tab;
   const changeTab = (t: Tab) => go({ v: "ogrenci", id, t: t === "ozet" ? undefined : t }, { replace: true });
 
   if (error)
@@ -802,7 +821,15 @@ function StudentDetail({ id, tab: tabParam }: { id: string; tab?: string }) {
         </div>
       </div>
 
-      <Tabs tabs={TABS} value={tab} onChange={changeTab} />
+      <div className="space-y-2">
+        <Segmented
+          ariaLabel="Bölüm"
+          value={group.id}
+          onChange={(g) => changeTab(lastTab.current[g] ?? TAB_GROUPS.find((x) => x.id === g)!.tabs[0])}
+          options={TAB_GROUPS.map((g) => ({ value: g.id, label: g.label }))}
+        />
+        <Tabs tabs={TABS.filter((t) => group.tabs.includes(t.value)).sort((a, b) => group.tabs.indexOf(a.value) - group.tabs.indexOf(b.value))} value={tab} onChange={changeTab} />
+      </div>
 
       <div className="pt-1">
         {tab === "ozet" && (
@@ -899,6 +926,7 @@ function CounselorSettings() {
           </div>
         </div>
       </Card>
+      <DbStatusCard />
       <AppearanceCard />
       <NotificationsCard />
       <CatalogManager />

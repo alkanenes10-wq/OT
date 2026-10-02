@@ -47,6 +47,15 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncelleme 3.3 — kullanım kolaylığı
+
+SQL gerekmez. Yeni dosyalar: `bugun-kutusu.tsx`, `durum.tsx`.
+- **Öğrenci · Bugün**: en üstte tek "Şimdi sıradaki" kartı (sıradaki görev → günlük → "her şey tamam"). 5 dakika modu, sorularım ve haftalık özet "Daha fazla" altında.
+- **Öğrenci · Günlük**: uyku ve telefon tek dokunuşla seçilir (hazır değerler, −/+, "dün" işareti); yazılı değerlendirme isteğe bağlı ve kapalı gelir; altta "x/7 alan dolu" göstergeli sabit Kaydet çubuğu.
+- **Danışman · Öğrenciler**: "Bugün ilgilenmem gerekenler" kutusu (bugünkü görüşmeler, 3+ gündür günlük doldurmayanlar, geciken görevi birikenler, programı olmayanlar, onay bekleyen forum).
+- **Danışman · Öğrenci sayfası**: 11 sekme 4 grupta (Genel, Çalışma, Takip, Veli ve hesap).
+- **Ayarlar · Veritabanı durumu**: hangi özelliğin eksik olduğunu gösterir; eksik varsa Öğrenciler sayfasında da uyarı çıkar.
+
 ## Güncellemeleri tek seferde yapmak (önerilen)
 
 Hangi `guncelleme-X.sql` dosyalarını çalıştırdığınızdan emin değilseniz ya da uygulamada "Veritabanı güncel değil", "… çalıştırılmalı" uyarısı görüyorsanız:
