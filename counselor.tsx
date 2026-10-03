@@ -4,6 +4,7 @@
 import { CounselorAi } from "./yz-soru";
 import { CounselorWeeklyReports } from "./haftalik";
 import { ParentMessagesCard } from "./veli";
+import { Icon3D, has3D } from "./ikon3d";
 import { TaskBoard } from "./gorev-panosu";
 import { SessionReport } from "./gorusme-raporu";
 import { CounselorVideos } from "./videolar";
@@ -536,12 +537,16 @@ function StudentList() {
 
 function Summary({ label, value, tone, icon }: { label: string; value: string | number; tone?: "warning"; icon: IconName }) {
   return (
-    <div className="card flex items-center gap-3 px-3 py-3 sm:px-5 sm:py-4">
-      <span className={cx("hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex", tone === "warning" ? "bg-warning-soft text-warning" : "bg-primary-soft text-primary-ink")}>
-        <Icon name={icon} size={20} />
-      </span>
+    <div className="card flex flex-col gap-1.5 px-3 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-4">
+      {has3D(icon) ? (
+        <Icon3D name={icon} size={46} className="-ml-1 shrink-0 sm:ml-0" />
+      ) : (
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary-ink">
+          <Icon name={icon} size={20} />
+        </span>
+      )}
       <span className="min-w-0">
-        <span className="block text-xs font-medium text-muted">{label}</span>
+        <span className="block text-xs font-medium leading-tight text-muted">{label}</span>
         <span className={cx("display mt-0.5 block text-[26px] leading-tight tabular", tone === "warning" && "text-warning")}>{value}</span>
       </span>
     </div>

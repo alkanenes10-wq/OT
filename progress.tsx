@@ -636,7 +636,7 @@ export function ExamTrends({ exams }: { exams: Pick<ExamAnalysis, "exam_date" | 
         return (
           <Card
             key={t}
-            title={`${t} net gelişimi`}
+            title={`${t === "AYT" && list.every((e) => "Yabancı Dil" in (e.nets ?? {})) ? "YDT" : t} net gelişimi`}
             subtitle={`${list.length} deneme${vals.length >= 2 ? ` · ilk ${fmtNum(first)} → son ${fmtNum(lastV)} (${lastV - first >= 0 ? "+" : ""}${fmtNum(lastV - first)})` : ""}`}
           >
             <LineChart

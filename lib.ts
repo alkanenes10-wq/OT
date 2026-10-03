@@ -164,7 +164,7 @@ export const FIELD_SECTIONS: Record<string, string[]> = {
   SAY: ["tyt-matematik", "ayt-matematik", "geometri", "tyt-fizik", "ayt-fizik", "tyt-kimya", "ayt-kimya", "tyt-biyoloji", "ayt-biyoloji", "tyt-turkce"],
   EA: ["tyt-matematik", "ayt-matematik", "geometri", "tyt-turkce", "ayt-edebiyat", "tyt-tarih", "ayt-tarih", "tyt-cografya", "ayt-cografya"],
   "SÖZ": ["tyt-matematik", "tyt-turkce", "ayt-edebiyat", "tyt-tarih", "ayt-tarih", "tyt-cografya", "ayt-cografya", "tyt-felsefe", "tyt-din"],
-  "DİL": ["tyt-matematik", "geometri", "tyt-turkce"],
+  "DİL": ["ydt-dilbilgisi", "ydt-soru-turleri", "tyt-turkce", "tyt-matematik", "geometri", "tyt-tarih", "tyt-cografya", "tyt-felsefe", "tyt-din"],
   TYT: ["tyt-matematik", "geometri", "tyt-fizik", "tyt-kimya", "tyt-biyoloji", "tyt-turkce", "tyt-tarih", "tyt-cografya", "tyt-felsefe", "tyt-din"],
   LGS: ["lgs-matematik", "lgs-fen", "lgs-turkce", "lgs-inkilap", "lgs-din", "lgs-ingilizce"],
   KPSS: ["kpss-matematik", "kpss-turkce", "kpss-tarih", "kpss-cografya", "kpss-vatandaslik"],
@@ -183,6 +183,12 @@ export function examTypesFor(field: string | null | undefined): ExamAnalysis["ex
   const s = sinavOf(field);
   return s === "LGS" ? ["LGS", "BRANS"] : s === "KPSS" ? ["KPSS", "BRANS"] : ["TYT", "AYT", "BRANS"];
 }
+/** Deneme net tablosundaki bölümler: DİL öğrencisinde AYT oturumu Yabancı Dil Testi'dir (YDT, 80 soru) */
+export function examSectionsFor(type: ExamAnalysis["exam_type"], field: string | null | undefined): { name: string; count: number }[] {
+  return field === "DİL" && type === "AYT" ? [{ name: "Yabancı Dil", count: 80 }] : EXAM_SECTIONS[type];
+}
+/** Deneme türünün görünen adı */
+export const examTypeLabel = (type: string, field?: string | null) => (type === "BRANS" ? "Branş" : type === "AYT" && field === "DİL" ? "YDT" : type);
 /** Kaç yanlış bir doğruyu götürür: LGS'de 3, diğerlerinde 4 */
 export const wrongDivisor = (type: string | null | undefined) => (type === "LGS" ? 3 : 4);
 
@@ -516,11 +522,13 @@ export const DEFAULT_SUBJECTS = [
   "GÜNLÜK TEKRAR",
 ];
 
+const DIL_SUBJECTS = ["YDT DİL BİLGİSİ", "YDT KELİME", "YDT OKUMA", "YDT ÇEVİRİ", "YDT SORU TÜRLERİ", "TÜRKÇE", "TYT MATEMATİK", "GEOMETRİ", "TARİH", "COĞRAFYA", "FELSEFE", "PARAGRAF", "PROBLEM", "GÜNLÜK TEKRAR"];
 const LGS_SUBJECTS = ["LGS TÜRKÇE", "LGS MATEMATİK", "FEN BİLİMLERİ", "İNKILAP TARİHİ", "LGS DİN KÜLTÜRÜ", "İNGİLİZCE", "PARAGRAF", "GÜNLÜK TEKRAR"];
 const KPSS_SUBJECTS = ["KPSS TÜRKÇE", "KPSS MATEMATİK", "KPSS TARİH", "KPSS COĞRAFYA", "VATANDAŞLIK", "PARAGRAF", "PROBLEM", "GÜNLÜK TEKRAR"];
 /** Öğrencinin sınavına göre programdaki ders satırları */
 export function subjectsFor(field: string | null | undefined): string[] {
   const s = sinavOf(field);
+  if (field === "DİL") return DIL_SUBJECTS;
   return s === "LGS" ? LGS_SUBJECTS : s === "KPSS" ? KPSS_SUBJECTS : DEFAULT_SUBJECTS;
 }
 
@@ -543,6 +551,11 @@ export const SUBJECT_SECTIONS: Record<string, string[]> = {
   "TYT BİYOLOJİ": ["tyt-biyoloji"],
   "AYT BİYOLOJİ": ["ayt-biyoloji"],
   "DİN KÜLTÜRÜ": ["tyt-din"],
+  "YDT DİL BİLGİSİ": ["ydt-dilbilgisi"],
+  "YDT KELİME": ["ydt-dilbilgisi"],
+  "YDT OKUMA": ["ydt-soru-turleri"],
+  "YDT ÇEVİRİ": ["ydt-soru-turleri"],
+  "YDT SORU TÜRLERİ": ["ydt-soru-turleri"],
   "LGS TÜRKÇE": ["lgs-turkce"],
   "LGS MATEMATİK": ["lgs-matematik"],
   "FEN BİLİMLERİ": ["lgs-fen"],
@@ -561,6 +574,8 @@ export function subjectForTopic(topicId: string): string {
   const section = topicId.split(".")[0];
   if (topicId === "tyt-matematik.problemler") return "PROBLEM";
   if (topicId.startsWith("tyt-turkce.paragrafta")) return "PARAGRAF";
+  if (section === "ydt-dilbilgisi") return /vocabulary|collocations/.test(topicId) ? "YDT KELİME" : "YDT DİL BİLGİSİ";
+  if (section === "ydt-soru-turleri") return /ceviri/.test(topicId) ? "YDT ÇEVİRİ" : /okuma|paragraf|anlam-butunlugunu/.test(topicId) ? "YDT OKUMA" : "YDT SORU TÜRLERİ";
   for (const [subject, sections] of Object.entries(SUBJECT_SECTIONS)) {
     if (subject === "PARAGRAF" || subject === "PROBLEM") continue;
     if (sections.includes(section)) return subject;

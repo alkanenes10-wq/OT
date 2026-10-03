@@ -86,6 +86,11 @@ const levelQ = (l: DayLevel) => DAY_LEVELS.find((x) => x.value === l)?.questions
 
 /** Tablo satır sırası: önce sayısal, sonra sözel dersler, en sonda rutinler */
 const GRID_SUBJECTS = [
+  "YDT DİL BİLGİSİ",
+  "YDT KELİME",
+  "YDT OKUMA",
+  "YDT ÇEVİRİ",
+  "YDT SORU TÜRLERİ",
   "TYT MATEMATİK",
   "AYT MATEMATİK",
   "GEOMETRİ",
@@ -1355,7 +1360,7 @@ function TaskEditor({
 
 
 function defaultShare(field: string | null, grade: string | null) {
-  if (field === "TYT" || field === "DİL" || sinavOf(field) !== "YKS") return 100;
+  if (field === "TYT" || sinavOf(field) !== "YKS") return 100;
   if (grade && /^(9|10|11)\./.test(grade)) return 70;
   return 50;
 }

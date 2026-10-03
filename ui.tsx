@@ -16,6 +16,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { A, type Route } from "./db";
+import { Icon3D, has3D } from "./ikon3d";
 
 /* ---------------- Simgeler ---------------- */
 const PATHS = {
@@ -352,7 +353,7 @@ export function Card({
       {(title || action) && (
         <header className="flex items-start justify-between gap-3 px-4 pt-4 sm:px-5">
           <div className="min-w-0">
-            {title && <h2 className="text-[15px] font-semibold text-fg">{title}</h2>}
+            {title && <h2 className="text-base font-semibold tracking-[-0.01em] text-fg">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0">{action}</div>}
@@ -567,10 +568,14 @@ export function PageLoader({ text = "Yükleniyor…" }: { text?: string }) {
 export function EmptyState({ icon = "info", title, children, action }: { icon?: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary-ink">
-        <Icon name={icon} size={24} />
-      </div>
-      <h3 className="mt-1 font-semibold text-fg">{title}</h3>
+      {has3D(icon) ? (
+        <Icon3D name={icon} size={76} className="float-soft" />
+      ) : (
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary-ink">
+          <Icon name={icon} size={24} />
+        </div>
+      )}
+      <h3 className="mt-1 text-base font-semibold text-fg">{title}</h3>
       {children && <div className="max-w-sm text-sm text-muted">{children}</div>}
       {action && <div className="mt-2">{action}</div>}
     </div>

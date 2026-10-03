@@ -330,6 +330,42 @@ export const COURSES: Course[] = [
       ]),
     ],
   },
+  {
+    id: "yabanci-dil",
+    name: "Yabancı Dil (İngilizce)",
+    short: "Yabancı Dil",
+    sections: [
+      section("ydt-dilbilgisi", "YDT Dil Bilgisi ve Kelime", "AYT", [
+        ["Tenses", "Present, Past, Future, Perfect ve Continuous Yapılar, Zaman Uyumu, Time Clauses", "Zamanlar ve zaman uyumu", "2-3"],
+        ["Modals", "Ability, Obligation, Necessity, Permission, Advice, Deduction, Past Modals (should have, must have)", "Kiplikler ve geçmiş kullanımları", "1-2"],
+        ["Passive Voice and Causatives", "Passive in All Tenses, Passive with Modals, Have/Get Something Done, Make/Let/Have Somebody Do", "Edilgen ve ettirgen yapılar", "1"],
+        ["Conditionals and Wish Clauses", "Type 0-1-2-3, Mixed Conditionals, Unless, Provided That, Wish, If Only, Would Rather", "Koşul ve dilek cümleleri", "1-2"],
+        ["Relative Clauses", "Defining and Non-defining, Who, Which, That, Whose, Where, When, Reduction of Relative Clauses", "Sıfat cümlecikleri ve kısaltmaları", "1-2"],
+        ["Noun Clauses and Reported Speech", "That Clauses, Wh- Clauses, If/Whether, Reported Statements, Questions and Commands, Subjunctive", "İsim cümlecikleri ve dolaylı anlatım", "1"],
+        ["Gerunds and Infinitives", "Verbs Followed by Gerund or Infinitive, Perfect and Passive Forms, Participles", "İsim-fiil, mastar ve ortaçlar", "1"],
+        ["Adverbial Clauses and Conjunctions", "Time, Reason, Result, Contrast, Purpose, Condition, Although, Despite, So...That, Transitions (However, Therefore, Moreover)", "Bağlaçlar ve zarf cümlecikleri", "3-4"],
+        ["Adjectives, Adverbs and Comparisons", "Order of Adjectives, -ed/-ing Adjectives, Comparative and Superlative, As...As, The More...The More, So/Such, Too/Enough", "Sıfat, zarf ve karşılaştırma yapıları", "1"],
+        ["Nouns, Articles, Quantifiers and Pronouns", "Countable and Uncountable, A/An/The, Some, Any, Much, Many, Few, Little, Both, Either, Neither, Reflexive and Indefinite Pronouns", "İsimler, tanımlıklar, miktar belirteçleri, zamirler", "1"],
+        ["Prepositions and Phrasal Verbs", "Prepositions of Time, Place and Movement, Adjective/Verb/Noun + Preposition, Common Phrasal Verbs", "Edatlar ve deyimsel fiiller", "2-3"],
+        ["Vocabulary: Verbs and Nouns", "Akademik Fiiller, İsimler, Eş ve Yakın Anlamlılar, Bağlamdan Anlam Çıkarma", "Fiil ve isim kelime bilgisi", "2-3"],
+        ["Vocabulary: Adjectives and Adverbs", "Sıfatlar, Zarflar, Ekler (Prefix-Suffix), Kelime Türetme", "Sıfat ve zarf kelime bilgisi", "2"],
+        ["Collocations and Idioms", "Make/Do/Take/Have Collocations, Sık Kullanılan Kalıplar, Deyimler", "Birlikte kullanılan sözcükler", "0-1"],
+      ]),
+      section("ydt-soru-turleri", "YDT Soru Türleri", "AYT", [
+        ["Kelime ve Dil Bilgisi Soruları", "Boşluk Doldurma: Kelime (5 soru), Dil Bilgisi ve Bağlaç (10 soru)", "Cümlede boşluğa uygun sözcük ya da yapıyı bulma", "15"],
+        ["Cloze Test", "Paragrafta Boşluk Doldurma: Kelime, Edat, Bağlaç, Zaman", "Parça içinde boşlukları tamamlama", "5"],
+        ["Cümle Tamamlama", "Yarım Bırakılan Cümleyi Anlam ve Yapı Bakımından Tamamlama, Bağlaç ve Zaman Uyumu", "Sentence completion", "8"],
+        ["İngilizce-Türkçe Çeviri", "Cümle Yapısını Çözümleme, Zaman ve Kip Uyumu, Bağlaçların Karşılıkları", "İngilizce cümlenin Türkçe karşılığını bulma", "6"],
+        ["Türkçe-İngilizce Çeviri", "Özne-Yüklem Eşleştirme, Yan Cümleleri Aktarma, Yapı Karşılıkları", "Türkçe cümlenin İngilizce karşılığını bulma", "6"],
+        ["Okuma Parçaları (Paragraf)", "Ana Fikir, Detay Soruları, Çıkarım, Gönderim (Reference), Kelimenin Bağlamdaki Anlamı", "Reading comprehension: 5 parça, 3'er soru", "15"],
+        ["Diyalog Tamamlama", "Konuşmanın Akışına Uygun İfadeyi Bulma, Soru-Cevap Uyumu", "Dialogue completion", "5"],
+        ["Anlamca En Yakın Cümle", "Restatement: Aynı Anlamı Farklı Yapıyla İfade Etme, Bağlaç ve Kip Eşdeğerlikleri", "Verilen cümleye anlamca en yakın cümleyi bulma", "5"],
+        ["Paragraf Tamamlama", "Paragrafta Boş Bırakılan Yere Uygun Cümleyi Bulma, Anlam Akışı, Gönderimler", "Paragraph completion", "5"],
+        ["Duruma Uygun İfade", "Verilen Durumda Söylenecek Cümleyi Bulma, Resmî ve Gündelik Dil", "Situational response", "5"],
+        ["Anlam Bütünlüğünü Bozan Cümle", "Konu Dışına Çıkan Cümleyi Bulma, Paragrafın Akışı ve Bağlantılar", "Irrelevant sentence", "5"],
+      ]),
+    ],
+  },
 ];
 
 /* ==================================================================
@@ -532,6 +568,7 @@ const SECTION_GRADE: Record<string, number> = {
   "tyt-turkce": 9, "ayt-edebiyat": 11, "tyt-matematik": 9, "ayt-matematik": 11, geometri: 10,
   "tyt-fizik": 9, "ayt-fizik": 11, "tyt-kimya": 9, "ayt-kimya": 11, "tyt-biyoloji": 9, "ayt-biyoloji": 11,
   "tyt-tarih": 9, "ayt-tarih": 11, "tyt-cografya": 9, "ayt-cografya": 11, "tyt-felsefe": 10, "tyt-din": 10,
+  "ydt-dilbilgisi": 9, "ydt-soru-turleri": 9,
 };
 const TOPIC_GRADE: Record<string, number> = {
   "tyt-turkce.fiilimsiler-fiilde-cati": 10, "tyt-turkce.cumlenin-ogeleri": 10, "tyt-turkce.anlatim-bozukluklari": 10,
@@ -568,14 +605,17 @@ const cache = new Map<string, Course[]>();
 export function coursesFor(field: string | null | undefined, grade?: string | null): Course[] {
   const sinav = sinavOf(field);
   const level = sinav === "YKS" ? gradeLevel(grade) : 12;
-  const key = `${sinav}-${level}`;
+  const dil = field === "DİL";
+  const key = `${sinav}-${level}-${dil ? "dil" : ""}`;
+  // Yabancı dil dersi yalnızca DİL öğrencilerine gösterilir
+  const YKS = dil ? COURSES : COURSES.filter((c) => c.id !== "yabanci-dil");
   const hit = cache.get(key);
   if (hit) return hit;
   let out: Course[];
   if (sinav !== "YKS") out = EK_COURSES.filter((c) => c.sinav === sinav);
-  else if (level >= 12) out = COURSES;
+  else if (level >= 12) out = YKS;
   else
-    out = COURSES.map((c) => ({
+    out = YKS.map((c) => ({
       ...c,
       sections: c.sections.map((s) => ({ ...s, topics: s.topics.filter((t) => topicGrade(t.id) <= level) })).filter((s) => s.topics.length > 0),
     })).filter((c) => c.sections.length > 0);
@@ -584,4 +624,4 @@ export function coursesFor(field: string | null | undefined, grade?: string | nu
 }
 export const sectionsOfCourses = (courses: Course[]) => courses.flatMap((c) => c.sections);
 /** Bölüm rozetinde gösterilecek etiket: LGS / KPSS / TYT / AYT */
-export const sectionTag = (s: Section) => s.sinav ?? s.exam;
+export const sectionTag = (s: Section) => s.sinav ?? (s.id.startsWith("ydt-") ? "YDT" : s.exam);

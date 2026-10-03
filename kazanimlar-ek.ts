@@ -587,4 +587,124 @@ export const KAZANIMLAR_EK: Record<string, string[]> = {
     "Uluslararası kuruluşları ve üyelik bilgilerini tanır.",
     "Kültür, sanat, bilim ve spor alanındaki güncel olayları tanır.",
   ],
+  /* ---------------- YDT (Yabancı Dil Testi, İngilizce) ---------------- */
+  "ydt-dilbilgisi.tenses": [
+    "Zamanları (present, past, future, perfect) cümlenin bağlamına göre doğru seçer.",
+    "Zaman zarflarını ve bağlaçlarını (by the time, since, until) uygun zamanla eşleştirir.",
+    "Ana cümle ile yan cümle arasındaki zaman uyumunu kurar.",
+  ],
+  "ydt-dilbilgisi.modals": [
+    "Kiplikleri yetenek, zorunluluk, izin, tavsiye ve çıkarım anlamlarına göre ayırt eder.",
+    "Geçmişe yönelik kiplikleri (must have, should have, could have) doğru kullanır.",
+    "Kipliklerin edilgen ve sürekli biçimlerini tanır.",
+  ],
+  "ydt-dilbilgisi.passive-voice-and-causatives": [
+    "Etken cümleyi edilgen yapıya dönüştürür ve zamanını korur.",
+    "Kipliklerle ve mastarlarla edilgen yapıyı kullanır.",
+    "Ettirgen yapıları (have/get something done, make/let) ayırt eder.",
+  ],
+  "ydt-dilbilgisi.conditionals-and-wish-clauses": [
+    "Koşul cümlelerinin türlerini (0, 1, 2, 3 ve karma) zaman uyumuna göre ayırt eder.",
+    "Unless, provided that, as long as gibi koşul bağlaçlarını kullanır.",
+    "Wish, if only ve would rather yapılarında doğru zamanı seçer.",
+  ],
+  "ydt-dilbilgisi.relative-clauses": [
+    "Tanımlayan ve tanımlamayan sıfat cümleciklerini ayırt eder.",
+    "Who, which, that, whose, where, when ilgi zamirlerinden uygun olanı seçer.",
+    "Sıfat cümleciklerinin kısaltılmış biçimlerini (-ing, -ed) tanır.",
+  ],
+  "ydt-dilbilgisi.noun-clauses-and-reported-speech": [
+    "That, if/whether ve soru sözcükleriyle kurulan isim cümleciklerini tanır.",
+    "Dolaylı anlatımda zaman, zamir ve zarf değişikliklerini uygular.",
+    "Soru ve emir cümlelerini dolaylı anlatıma çevirir.",
+  ],
+  "ydt-dilbilgisi.gerunds-and-infinitives": [
+    "Kendinden sonra isim-fiil ya da mastar alan fiilleri ayırt eder.",
+    "Anlamı değişen fiilleri (remember, stop, try) bağlama göre kullanır.",
+    "Ortaç yapılarını (participle clauses) tanır.",
+  ],
+  "ydt-dilbilgisi.adverbial-clauses-and-conjunctions": [
+    "Zaman, neden, sonuç, zıtlık ve amaç bağlaçlarını anlam ilişkisine göre seçer.",
+    "Cümle bağlaçları ile isim öbeği alan bağlaçları (although / despite) ayırt eder.",
+    "Geçiş ifadelerini (however, therefore, moreover) cümleler arası ilişkiye göre kullanır.",
+  ],
+  "ydt-dilbilgisi.adjectives-adverbs-and-comparisons": [
+    "Sıfat ve zarfları cümledeki görevine göre ayırt eder.",
+    "Karşılaştırma ve üstünlük yapılarını kurar.",
+    "So/such...that ve too/enough yapılarını doğru kullanır.",
+  ],
+  "ydt-dilbilgisi.nouns-articles-quantifiers-and-pronouns": [
+    "Sayılabilen ve sayılamayan isimlerle uygun miktar belirtecini seçer.",
+    "Tanımlıkları (a, an, the) bağlama göre kullanır.",
+    "Dönüşlü, belgisiz ve iyelik zamirlerini ayırt eder.",
+  ],
+  "ydt-dilbilgisi.prepositions-and-phrasal-verbs": [
+    "Zaman, yer ve yön edatlarını doğru kullanır.",
+    "Fiil, sıfat ve isimlerle birlikte kullanılan edatları tanır.",
+    "Sık kullanılan deyimsel fiillerin anlamını bağlamdan çıkarır.",
+  ],
+  "ydt-dilbilgisi.vocabulary-verbs-and-nouns": [
+    "Sınavda sık çıkan fiil ve isimlerin anlamını bilir.",
+    "Bilinmeyen sözcüğün anlamını bağlamdan çıkarır.",
+    "Yakın anlamlı sözcükler arasındaki kullanım farkını ayırt eder.",
+  ],
+  "ydt-dilbilgisi.vocabulary-adjectives-and-adverbs": [
+    "Sık çıkan sıfat ve zarfların anlamını bilir.",
+    "Ön ek ve son eklerden sözcüğün türünü ve anlamını çıkarır.",
+    "Cümlenin olumlu ya da olumsuz tonuna uygun sözcüğü seçer.",
+  ],
+  "ydt-dilbilgisi.collocations-and-idioms": [
+    "Birlikte kullanılan sözcük kalıplarını (make a decision, take part) tanır.",
+    "Sık kullanılan deyimlerin anlamını bilir.",
+  ],
+  "ydt-soru-turleri.kelime-ve-dil-bilgisi-sorulari": [
+    "Boşluğa anlamca uygun sözcüğü seçer.",
+    "Boşluğa dil bilgisi bakımından uygun yapıyı seçer.",
+    "Şıkları eleyerek süreyi verimli kullanır.",
+  ],
+  "ydt-soru-turleri.cloze-test": [
+    "Parçanın genel anlamını kavrayarak boşlukları doldurur.",
+    "Boşluğun öncesi ve sonrasındaki ipuçlarını (zaman, bağlaç, edat) kullanır.",
+  ],
+  "ydt-soru-turleri.cumle-tamamlama": [
+    "Yarım bırakılan cümleyi anlamca tamamlayan seçeneği bulur.",
+    "Bağlacın kurduğu anlam ilişkisine (neden, zıtlık, koşul) göre eleme yapar.",
+    "İki cümlecik arasındaki zaman uyumunu denetler.",
+  ],
+  "ydt-soru-turleri.ingilizce-turkce-ceviri": [
+    "İngilizce cümlenin öznesini, yüklemini ve yan cümlelerini ayırır.",
+    "Zaman, kip ve çatıyı Türkçeye doğru aktarır.",
+    "Anlamı eksilten ya da ekleme yapan şıkları eler.",
+  ],
+  "ydt-soru-turleri.turkce-ingilizce-ceviri": [
+    "Türkçe cümlenin yüklemini ve zamanını belirleyip İngilizce karşılığını bulur.",
+    "Yan cümleleri uygun bağlaç ve yapıyla aktarır.",
+    "Şıklardaki özne ve yüklem farklarından hızlı eleme yapar.",
+  ],
+  "ydt-soru-turleri.okuma-parcalari-paragraf": [
+    "Parçanın ana fikrini ve yazarın amacını belirler.",
+    "Ayrıntı sorularında ilgili bölümü bularak yanıtlar.",
+    "Parçadan çıkarım yapar ve altı çizili sözcüğün anlamını bağlamdan bulur.",
+  ],
+  "ydt-soru-turleri.diyalog-tamamlama": [
+    "Boşluktan önceki ve sonraki konuşmaya uygun ifadeyi seçer.",
+    "Soru-cevap uyumunu ve konuşmanın akışını denetler.",
+  ],
+  "ydt-soru-turleri.anlamca-en-yakin-cumle": [
+    "Verilen cümleyle aynı anlamı taşıyan seçeneği bulur.",
+    "Kip, bağlaç ve yapı eşdeğerliklerini tanır.",
+    "Anlamı daraltan ya da genişleten şıkları eler.",
+  ],
+  "ydt-soru-turleri.paragraf-tamamlama": [
+    "Boşluğun öncesi ve sonrasıyla anlam bütünlüğü kuran cümleyi seçer.",
+    "Zamir, bağlaç ve gönderim ipuçlarını kullanır.",
+  ],
+  "ydt-soru-turleri.duruma-uygun-ifade": [
+    "Verilen durumda söylenebilecek en uygun ifadeyi seçer.",
+    "Durumdaki amacı (rica, özür, öneri, itiraz) belirler.",
+  ],
+  "ydt-soru-turleri.anlam-butunlugunu-bozan-cumle": [
+    "Paragrafın konusunu belirleyip konu dışına çıkan cümleyi bulur.",
+    "Cümleler arasındaki bağlantı ve gönderimleri izler.",
+  ],
 };

@@ -43,7 +43,7 @@ const APP_FILES = [
   "videolar.tsx",
   "kazanimlar-ek.ts",
   "haftalik.tsx",
-  "yz-soru.tsx",
+  "yz-soru.tsx", "ikon3d.tsx",
   "bugun-kutusu.tsx",
   "durum.tsx",
   "gorev-panosu.tsx",

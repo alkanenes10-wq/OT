@@ -3,6 +3,7 @@
 
 import { StudentAi } from "./yz-soru";
 import { StudentWeeklyCard } from "./haftalik";
+import { Icon3D } from "./ikon3d";
 import { StudentVideos, VideoSuggestionsCard } from "./videolar";
 import { BadgesCard, StreakCard } from "./oyun";
 import { NotificationsCard } from "./bildirim";
@@ -273,8 +274,9 @@ function FocusCard({
 
   if (next) {
     return (
-      <section className="card border-primary/30 bg-primary-soft p-4 sm:p-5">
-        <p className="text-xs font-bold uppercase tracking-wide text-primary-ink">
+      <section className="card relative overflow-hidden border-primary/30 bg-primary-soft p-4 sm:p-5">
+        <Icon3D name="target" size={84} className="float-soft pointer-events-none absolute -right-1 -top-1 sm:right-3 sm:top-3" />
+        <p className="pr-20 text-xs font-bold uppercase tracking-wide text-primary-ink">
           Şimdi sıradaki · {done + 1}/{total}
         </p>
         <p className="mt-1.5 text-[11px] font-semibold tracking-wide text-muted">
@@ -282,7 +284,7 @@ function FocusCard({
           {next.start_time ? ` · ${next.start_time}` : ""}
           {next.duration_min ? ` · ${next.duration_min} dk` : ""}
         </p>
-        <p className="display text-xl leading-snug">{taskTitle(next)}</p>
+        <p className="display pr-20 text-xl leading-snug">{taskTitle(next)}</p>
         {next.target_questions ? <p className="mt-0.5 text-sm text-muted">Hedef: {next.target_questions} soru</p> : null}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button icon="check" onClick={() => onDone(next)}>
@@ -299,10 +301,11 @@ function FocusCard({
   }
   if (!hasLog) {
     return (
-      <section className="card border-primary/30 bg-primary-soft p-4 sm:p-5">
-        <p className="text-xs font-bold uppercase tracking-wide text-primary-ink">{total ? "Bugünün görevleri tamam" : "Şimdi sıradaki"}</p>
-        <p className="display mt-1.5 text-xl leading-snug">Bugünü 30 saniyede kaydet</p>
-        <p className="mt-0.5 text-sm text-muted">Uyku, telefon ve ruh hâlini işaretle; günlük serine 1 gün eklensin.</p>
+      <section className="card relative overflow-hidden border-primary/30 bg-primary-soft p-4 sm:p-5">
+        <Icon3D name="journal" size={84} className="float-soft pointer-events-none absolute -right-1 -top-1 sm:right-3 sm:top-3" />
+        <p className="pr-20 text-xs font-bold uppercase tracking-wide text-primary-ink">{total ? "Bugünün görevleri tamam" : "Şimdi sıradaki"}</p>
+        <p className="display mt-1.5 pr-20 text-xl leading-snug">Bugünü 30 saniyede kaydet</p>
+        <p className="mt-0.5 pr-16 text-sm text-muted">Uyku, telefon ve ruh hâlini işaretle; günlük serine 1 gün eklensin.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button icon="journal" onClick={onLog}>
             Günlüğü doldur
@@ -318,9 +321,7 @@ function FocusCard({
   }
   return (
     <section className="card flex items-center gap-3 border-success/30 bg-success-soft p-4">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success text-white">
-        <Icon name="check" size={20} strokeWidth={3} />
-      </span>
+      <Icon3D name="check" size={52} className="shrink-0" />
       <div className="text-sm">
         <p className="font-semibold">Bugün için her şey tamam</p>
         <p className="text-muted">{total ? `${done}/${total} görev bitti, günlüğün dolu.` : "Günlüğün dolu."} İyi dinlenmeler.</p>
@@ -421,11 +422,11 @@ function Progress() {
   return (
     <>
       <PageHeader title="İlerleme" />
-      <div className="mb-4">
-        <BadgesCard studentId={profile.id} />
-      </div>
       <StudentWeeklyCard />
       <StudentInsights studentId={profile.id} />
+      <div className="mt-4">
+        <BadgesCard studentId={profile.id} collapsible />
+      </div>
     </>
   );
 }

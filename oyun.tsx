@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ALL_TOPICS, COURSES, EK_COURSES, sinavOf } from "./curriculum";
 import { sb, useAuth } from "./db";
 import { fmtNum } from "./lib";
-import { Button, Card, Modal, cx, portal, useToast } from "./ui";
+import { Button, Card, Modal, cx, portal, useToast, Icon } from "./ui";
 
 export type MonthStat = { m: string; q: number; d: number };
 export type MonthGoalRow = { m: string; q: number | null; d: number | null };
@@ -151,7 +151,7 @@ const TOPIC_IDS = new Set(ALL_TOPICS.map((t) => t.id));
 /** Öğrencinin sınavına ait bölümler (alan bilgisi yoksa bitirdiği konulardan anlaşılır) */
 function sectionsOf(s: GameStats) {
   const sinav = s.field !== undefined ? sinavOf(s.field) : (s.topics_done ?? []).some((t) => t.startsWith("lgs-")) ? "LGS" : (s.topics_done ?? []).some((t) => t.startsWith("kpss-")) ? "KPSS" : "YKS";
-  return (sinav === "YKS" ? COURSES : EK_COURSES.filter((c) => c.sinav === sinav)).flatMap((c) => c.sections);
+  return (sinav === "YKS" ? COURSES.filter((c) => s.field === "DİL" || c.id !== "yabanci-dil") : EK_COURSES.filter((c) => c.sinav === sinav)).flatMap((c) => c.sections);
 }
 function sectionProgress(s: GameStats) {
   const done = new Set(s.topics_done ?? []);
@@ -819,9 +819,12 @@ function BadgeBook({ stats }: { stats: GameStats }) {
   }, []);
   return (
     <div className="space-y-4">
-      <div className="rounded-xl bg-surface-2 p-3 text-xs text-muted">
-        <p className="mb-1 font-semibold text-fg">Rozetler nasıl kazanılır?</p>
-        <ul className="list-disc space-y-1 pl-4">
+      <details className="group/how rounded-xl bg-surface-2 p-3 text-xs text-muted">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-fg [&::-webkit-details-marker]:hidden">
+          Rozetler nasıl kazanılır?
+          <Icon name="chevronDown" size={16} className="shrink-0 text-muted transition-transform group-open/how:rotate-180" />
+        </summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
           <li>
             {FAMILIES.length} seviyeli rozet türü var. Her türde bir hedefe ulaştığında o rozeti alırsın ve bir sonraki hedef açılır. Hedeflerin sonu yoktur. Örnek: Soru rozetlerini 100, 500, 1.000, 2.500 ve 5.000 soruda alırsın; sonra her 2.500 soruda bir yeni rozet gelir (7.500, 10.000, 12.500…).
           </li>
@@ -832,7 +835,7 @@ function BadgeBook({ stats }: { stats: GameStats }) {
           <li>7, 30 ve 100 günlük serilerde büyük bir kutlama ekranı açılır.</li>
           <li>Rozetler yalnızca senin kendi çalışmana göre verilir; başka öğrencilerle yarışmazsın.</li>
         </ul>
-      </div>
+      </details>
 
       <MonthGoalBox stats={stats} />
 
@@ -964,12 +967,34 @@ function MonthGoalEditor({ studentId, stats, onSaved }: { studentId: string; sta
 }
 
 /** İlerleme ekranı / danışman özeti: rozet defteri kartı */
-export function BadgesCard({ studentId }: { studentId: string }) {
+export function BadgesCard({ studentId, collapsible = false }: { studentId: string; collapsible?: boolean }) {
   const { profile } = useAuth();
   const { stats, missing, reload } = useGameStats(studentId);
   if (missing || !stats) return null;
   const isCounselor = profile?.role === "counselor";
   const earned = earnedBadges(stats);
+  if (collapsible)
+    return (
+      <details className="card group/rozet">
+        <summary className="flex cursor-pointer list-none items-center gap-3 p-4 sm:p-5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold">Rozetlerim ve açıklamaları</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              {stats.streak} gün çalışma serisi · {stats.log_streak ?? 0} gün günlük serisi · toplam {earned.length} rozet
+            </p>
+          </div>
+          <span className="hidden -space-x-1.5 sm:flex">
+            {topBadges(earned, 5).map((b) => (
+              <Medal key={b.id} tier={b.tier} earned size={24} />
+            ))}
+          </span>
+          <Icon name="chevronDown" size={20} className="shrink-0 text-muted transition-transform group-open/rozet:rotate-180" />
+        </summary>
+        <div className="border-t border-line p-4 sm:p-5">
+          <BadgeBook stats={stats} />
+        </div>
+      </details>
+    );
   return (
     <Card
       title={isCounselor ? "Seri, hedef ve rozetler" : "Rozetlerim"}

@@ -8,16 +8,19 @@ import { analyzeKarne, type KarneReport } from "./actions";
 import { useStudentMeta, accessToken, errorText, fetchAnalyses, sb, useRoute } from "./db";
 import { GeneratorModal } from "./plan";
 import { ALL_TOPICS } from "./curriculum";
-import { EXAM_SECTIONS, examTypesFor, wrongDivisor, fmtNum, formatLong, formatShort, formatTR, net, subjectForTopic, todayISO, type ExamAnalysis } from "./lib";
+import { examSectionsFor, examTypeLabel, examTypesFor, wrongDivisor, fmtNum, formatLong, formatShort, formatTR, net, subjectForTopic, todayISO, type ExamAnalysis } from "./lib";
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Icon, IconButton, PageLoader, Segmented, Spinner, confirmAction, cx, useToast } from "./ui";
 
 type Draft = Omit<ExamAnalysis, "id" | "created_at" | "student_id"> & { id?: string };
 
 const emptyDraft = (type: ExamAnalysis["exam_type"] = "TYT"): Draft => ({ exam_date: todayISO(), title: "", exam_type: type, nets: {}, results: [], file_path: null, notes: "" });
 
-function sectionsFor(type: ExamAnalysis["exam_type"]): Section[] {
+function sectionsFor(type: ExamAnalysis["exam_type"], field?: string | null): Section[] {
   if (type === "LGS" || type === "KPSS") return EK_COURSES.filter((c) => c.sinav === type).flatMap((c) => c.sections);
-  const all = COURSES.flatMap((c) => c.sections);
+  const dil = field === "DİL";
+  const ydt = COURSES.filter((c) => c.id === "yabanci-dil").flatMap((c) => c.sections);
+  if (dil && type === "AYT") return ydt;
+  const all = COURSES.filter((c) => dil || c.id !== "yabanci-dil").flatMap((c) => c.sections);
   if (type === "BRANS") return all;
   return all.filter((s) => s.exam === type || s.id === "geometri");
 }
@@ -246,7 +249,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
               onChange={setKind}
               options={[
                 { value: "ALL", label: "Tümü" },
-                ...mainTypes.map((t) => ({ value: t as typeof kind, label: `${t} (${list.filter((a) => a.exam_type === t).length})` })),
+                ...mainTypes.map((t) => ({ value: t as typeof kind, label: `${examTypeLabel(t, meta.field)} (${list.filter((a) => a.exam_type === t).length})` })),
               ]}
             />
           </div>
@@ -263,7 +266,7 @@ export function ExamAnalyses({ studentId }: { studentId: string }) {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold">
-                      {a.title} <Badge tone="primary">{a.exam_type === "BRANS" ? "Branş" : a.exam_type}</Badge> {isLast && <Badge tone="success">Son {a.exam_type === "BRANS" ? "branş" : a.exam_type}</Badge>}
+                      {a.title} <Badge tone="primary">{examTypeLabel(a.exam_type, meta.field)}</Badge> {isLast && <Badge tone="success">Son {a.exam_type === "BRANS" ? "branş" : a.exam_type}</Badge>}
                     </p>
                     <p className="text-sm text-muted">{formatLong(a.exam_date)}</p>
                   </div>
@@ -407,7 +410,7 @@ function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: 
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sections = useMemo(() => sectionsFor(d.exam_type), [d.exam_type]);
+  const sections = useMemo(() => sectionsFor(d.exam_type, meta.field), [d.exam_type, meta.field]);
   const [sectionId, setSectionId] = useState(sections[0]?.id ?? "");
   useEffect(() => {
     if (!sections.some((s) => s.id === sectionId)) setSectionId(sections[0]?.id ?? "");
@@ -490,7 +493,7 @@ function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: 
               value={d.exam_type}
               onChange={(v) => setD({ ...d, exam_type: v, nets: {} })}
               ariaLabel="Deneme türü"
-              options={types.map((t) => ({ value: t, label: t === "BRANS" ? "Branş" : t }))}
+              options={types.map((t) => ({ value: t, label: examTypeLabel(t, meta.field) }))}
             />
           </Field>
         </div>
@@ -527,7 +530,7 @@ function AnalysisEditor({ studentId, initial, onCancel, onSaved }: { studentId: 
               </tr>
             </thead>
             <tbody>
-              {EXAM_SECTIONS[d.exam_type].map((s) => {
+              {examSectionsFor(d.exam_type, meta.field).map((s) => {
                 const v = d.nets[s.name] ?? {};
                 const b = v.d != null || v.y != null ? Math.max(0, s.count - (v.d ?? 0) - (v.y ?? 0)) : null;
                 return (

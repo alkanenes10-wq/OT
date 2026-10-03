@@ -12,7 +12,7 @@
   --fg: #101828;
   --muted: #475467;
   --faint: #667085;
-  --border: #e4e7ec;
+  --border: #e6e9ee;
   --primary: #0e7066;
   --primary-hover: #0b5c54;
   --primary-fg: #ffffff;
@@ -39,8 +39,8 @@
   --axis: #cfd4dc;
   --chart-ink: #344054;
   --chart-muted: #667085;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 14px -6px rgba(16, 24, 40, 0.10);
+  --shadow-md: 0 2px 4px -1px rgba(16, 24, 40, 0.05), 0 12px 28px -8px rgba(16, 24, 40, 0.16);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -420,4 +420,28 @@ details[open] > :not(summary) {
 }
 @media print {
   .card, .bar-grow, .chart-line, .chart-bar { animation: none !important; }
+}
+
+/* ---------------------------------------------------------------
+   3D ikonlar ve ince rötuş (3.5)
+   --------------------------------------------------------------- */
+.float-soft {
+  animation: float-soft 5s ease-in-out infinite;
+}
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+a.card, button.card {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+@media (hover: hover) {
+  a.card:hover, button.card:hover { transform: translateY(-1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .float-soft { animation: none !important; }
+  a.card:hover, button.card:hover { transform: none; }
+}
+@media print {
+  .float-soft { animation: none !important; }
 }

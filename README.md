@@ -47,6 +47,22 @@ Tüm dosyalar tek düzeydedir, alt klasör yoktur. Vercel derleme sırasında `h
 2. **Yeni öğrenci** → ad veya kod (ör. `ÖĞR-001`), kullanıcı adı (ör. `ogr001`), şifre → **Mesajı kopyala** ile öğrenciye gönder.
 3. Telefona ekleme — iPhone: Safari → **Paylaş → Ana Ekrana Ekle**. Android: Chrome → **⋮ → Uygulamayı yükle**.
 
+## Güncelleme 3.5 — 3D ikonlar ve görünüm rötuşu
+
+Boş ekranlarda ("Henüz program yok" vb.) ve ana sayfa kartlarında yumuşak 3D görünümlü ikonlar var (`ikon3d.tsx`; kodla çizilir,
+resim dosyası yoktur). Kart gölgeleri ve başlıklar inceltildi. Veritabanı güncellemesi gerekmez.
+
+## Güncelleme 3.4.2 — rozet açıklamaları en altta, açılır-kapanır
+
+Öğrencinin İlerleme sayfasında rozetler ve açıklamaları sayfanın en altına taşındı ve kapalı gelir; başlığa dokununca açılır.
+"Rozetler nasıl kazanılır?" kutusu da açılır-kapanır oldu. Veritabanı güncellemesi gerekmez.
+
+## Güncelleme 3.4.1 — DİL öğrencileri için Yabancı Dil (YDT) konuları
+
+Alanı **DİL** olan öğrencilerde Konular'a "Yabancı Dil (İngilizce)" dersi eklendi (dil bilgisi ve kelime 14 konu, soru türleri 11 konu,
+kazanımlarıyla). Programda YDT DİL BİLGİSİ / KELİME / OKUMA / ÇEVİRİ / SORU TÜRLERİ ders satırları, deneme girişinde 80 soruluk
+**YDT** türü var. Veritabanı güncellemesi gerekmez. Konuları `curriculum.ts` içinde düzenleyebilirsiniz.
+
 ## Güncelleme 3.4 — diğer sınavlar, haftalık rapor, veli paneli, yapay zekâ ile soru çözümü
 
 **Kurulum:** dosyaları yükleyin, Supabase'de `guncelleme-hepsi.sql` dosyasını bir kez çalıştırın.
